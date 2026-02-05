@@ -29,7 +29,7 @@
       "id": "FEAT-002",
       "type": "feat",
       "description": "Implement permissions snapshot writer and reader with comparison logic",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Create `PermissionsSnapshotWriter` class in `packages/@aws-cdk/integ-tests-alpha/lib/permissions/snapshot-writer.ts`",
         "Implement write functionality to save `permissions.snapshot.json` to snapshot directories",
@@ -53,7 +53,7 @@
       "id": "FEAT-003",
       "type": "feat",
       "description": "Integrate permissions tracking with IntegTest framework and manifest synthesizer",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Add `enablePermissionsSnapshot` option to `IntegTestProps` in `test-case.ts`",
         "Modify `IntegManifestSynthesizer` to include permissions tracking configuration in manifest",
@@ -75,7 +75,7 @@
       "id": "FEAT-004",
       "type": "feat",
       "description": "Integrate permissions snapshot validation with integration test runner",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Modify `tools/@aws-cdk/integration-test-deployment/lib/integration-test-runner.ts` to support permissions tracking",
         "Wrap AWS SDK client creation with PermissionsTracker middleware during test execution",

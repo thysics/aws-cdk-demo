@@ -4,13 +4,77 @@ import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 import { AtmosphereAllocation } from './atmosphere';
 import { getChangedSnapshots } from './utils';
 
-export const deployIntegTests = async (props: {
+/**
+ * Interface for permissions tracking module.
+ * This allows the integration test runner to optionally use permissions tracking
+ * if the module is available.
+ */
+interface PermissionsRunnerLike {
+  setupTracking(testName: string): void;
+  finalizeTracking(snapshotDir: string, options?: { updateSnapshots?: boolean }): {
+    success: boolean;
+    snapshotUpdated: boolean;
+    message: string;
+    diff?: unknown;
+  };
+  isTrackingActive(): boolean;
+  stopTracking(): void;
+  getMiddlewarePlugin<Input extends object, Output extends { $metadata: unknown }>(): unknown | undefined;
+}
+
+/**
+ * Try to load the permissions runner module.
+ * Returns undefined if not available.
+ */
+const tryLoadPermissionsRunner = (): PermissionsRunnerLike | undefined => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const permissionsModule = require('@aws-cdk/integ-tests-alpha/lib/permissions');
+    return permissionsModule.PermissionsRunner;
+  } catch {
+    // Module not available or not built yet - that's okay
+    return undefined;
+  }
+};
+
+/**
+ * Options for deploying integration tests
+ */
+export interface DeployIntegTestsOptions {
   atmosphereRoleArn: string;
   endpoint: string;
   pool: string;
   batchSize?: number;
-}) => {
+  /**
+   * Enable permissions snapshot tracking during test execution.
+   * When enabled, all AWS SDK calls will be recorded and compared
+   * against stored snapshots.
+   *
+   * @default false
+   */
+  enablePermissionsSnapshot?: boolean;
+  /**
+   * Update permissions snapshots instead of comparing them.
+   * Should be set to true when running with --update or --update-on-failed.
+   *
+   * @default false
+   */
+  updatePermissionsSnapshot?: boolean;
+}
+
+export const deployIntegTests = async (props: DeployIntegTestsOptions) => {
   const batchSize = props.batchSize ?? 3;
+  const enablePermissionsSnapshot = props.enablePermissionsSnapshot ?? false;
+  const updatePermissionsSnapshot = props.updatePermissionsSnapshot ?? false;
+
+  // Try to load permissions runner if enabled
+  let PermissionsRunner: PermissionsRunnerLike | undefined;
+  if (enablePermissionsSnapshot) {
+    PermissionsRunner = tryLoadPermissionsRunner();
+    if (!PermissionsRunner) {
+      console.warn('[IntegTestRunner] Permissions tracking enabled but @aws-cdk/integ-tests-alpha module not available');
+    }
+  }
 
   const changedSnapshots = await getChangedSnapshots();
 
@@ -19,6 +83,7 @@ export const deployIntegTests = async (props: {
   }
 
   let hasFailure = false;
+  const permissionsResults: { snapshot: string; result: ReturnType<PermissionsRunnerLike['finalizeTracking']> }[] = [];
 
   for (let i = 0; i < changedSnapshots.length; i += batchSize) {
     const batch = changedSnapshots.slice(i, i + batchSize);
@@ -47,11 +112,45 @@ export const deployIntegTests = async (props: {
       };
 
       await bootstrap(env);
+
+      // Setup permissions tracking for each snapshot in the batch
+      if (PermissionsRunner) {
+        for (const snapshotPath of batch) {
+          const testName = getTestNameFromSnapshotPath(snapshotPath);
+          PermissionsRunner.setupTracking(testName);
+        }
+      }
+
       await deployIntegrationTest(env, batch);
       outcome = 'success';
+
+      // Finalize permissions tracking and validate snapshots
+      if (PermissionsRunner) {
+        for (const snapshotPath of batch) {
+          const snapshotDir = getSnapshotDirectory(snapshotPath);
+          const result = PermissionsRunner.finalizeTracking(snapshotDir, {
+            updateSnapshots: updatePermissionsSnapshot,
+          });
+
+          permissionsResults.push({ snapshot: snapshotPath, result });
+
+          if (!result.success) {
+            console.error(`\n[PermissionsSnapshot] ${snapshotPath}:`);
+            console.error(result.message);
+            hasFailure = true;
+          } else if (result.snapshotUpdated) {
+            console.log(`[PermissionsSnapshot] Updated: ${snapshotPath}`);
+          }
+        }
+      }
     } catch (e) {
       console.error(e);
       hasFailure = true;
+
+      // Stop permissions tracking on error
+      if (PermissionsRunner) {
+        PermissionsRunner.stopTracking();
+      }
     } finally {
       try {
         await allocation.release(outcome);
@@ -68,6 +167,11 @@ export const deployIntegTests = async (props: {
         }
       }
     }
+  }
+
+  // Print summary of permissions snapshot results
+  if (permissionsResults.length > 0) {
+    printPermissionsResultsSummary(permissionsResults);
   }
 
   if (hasFailure) {
@@ -114,3 +218,70 @@ export const deployIntegrationTest = async (env: NodeJS.ProcessEnv, snapshotPath
     else reject(new Error(`Integration tests failed with exit code ${code}`));
   }));
 };
+
+/**
+ * Extract test name from snapshot path.
+ * e.g., "packages/@aws-cdk-testing/framework-integ/test/aws-s3/test/integ.bucket.js.snapshot"
+ * returns "aws-s3/integ.bucket"
+ */
+function getTestNameFromSnapshotPath(snapshotPath: string): string {
+  // Extract the integration test filename
+  const match = snapshotPath.match(/test\/([^/]+)\/test\/(integ\.[^/]+)\.js\.snapshot$/);
+  if (match) {
+    return `${match[1]}/${match[2]}`;
+  }
+  // Fallback: use the snapshot directory name
+  const parts = snapshotPath.split('/');
+  const snapshotDirName = parts[parts.length - 1] || parts[parts.length - 2];
+  return snapshotDirName.replace('.js.snapshot', '').replace('.snapshot', '');
+}
+
+/**
+ * Get the snapshot directory from a snapshot path.
+ * The path may be the snapshot directory itself or a file within it.
+ */
+function getSnapshotDirectory(snapshotPath: string): string {
+  if (snapshotPath.endsWith('.snapshot')) {
+    return snapshotPath;
+  }
+  // Assume it's a path to a file in the snapshot, get the directory
+  const parts = snapshotPath.split('/');
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (parts[i].endsWith('.snapshot')) {
+      return parts.slice(0, i + 1).join('/');
+    }
+  }
+  return snapshotPath;
+}
+
+/**
+ * Print a summary of permissions snapshot results.
+ */
+function printPermissionsResultsSummary(
+  results: { snapshot: string; result: ReturnType<PermissionsRunnerLike['finalizeTracking']> }[],
+): void {
+  const passed = results.filter(r => r.result.success && !r.result.snapshotUpdated);
+  const updated = results.filter(r => r.result.snapshotUpdated);
+  const failed = results.filter(r => !r.result.success);
+
+  console.log('\n=== Permissions Snapshot Summary ===');
+  console.log(`  Passed: ${passed.length}`);
+  console.log(`  Updated: ${updated.length}`);
+  console.log(`  Failed: ${failed.length}`);
+
+  if (updated.length > 0) {
+    console.log('\nUpdated snapshots:');
+    for (const r of updated) {
+      console.log(`  - ${r.snapshot}`);
+    }
+  }
+
+  if (failed.length > 0) {
+    console.log('\nFailed snapshots (permissions changed):');
+    for (const r of failed) {
+      console.log(`  - ${r.snapshot}`);
+    }
+  }
+
+  console.log('');
+}
