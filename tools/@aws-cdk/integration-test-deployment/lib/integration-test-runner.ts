@@ -1,16 +1,36 @@
 
 import { spawn } from 'child_process';
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
+import { PermissionsCollector, createPermissionsMiddleware } from '@aws-cdk/permissions-tracker';
 import { AtmosphereAllocation } from './atmosphere';
 import { getChangedSnapshots } from './utils';
+import {
+  PermissionsTrackingManager,
+  PermissionsTrackingOptions,
+  formatPermissionsError,
+  getSnapshotDirectoryForTest,
+  getTestNameFromPath,
+} from './permissions-tracking';
 
-export const deployIntegTests = async (props: {
+/**
+ * Options for running integration tests.
+ */
+export interface DeployIntegTestsOptions {
+  /** ARN of the Atmosphere role to assume */
   atmosphereRoleArn: string;
+  /** Atmosphere endpoint URL */
   endpoint: string;
+  /** Atmosphere pool name */
   pool: string;
+  /** Number of tests to run in parallel */
   batchSize?: number;
-}) => {
+  /** Options for permissions tracking */
+  permissionsTracking?: PermissionsTrackingOptions;
+}
+
+export const deployIntegTests = async (props: DeployIntegTestsOptions) => {
   const batchSize = props.batchSize ?? 3;
+  const permissionsOptions = props.permissionsTracking ?? {};
 
   const changedSnapshots = await getChangedSnapshots();
 
@@ -19,10 +39,24 @@ export const deployIntegTests = async (props: {
   }
 
   let hasFailure = false;
+  const permissionsFailures: string[] = [];
 
   for (let i = 0; i < changedSnapshots.length; i += batchSize) {
     const batch = changedSnapshots.slice(i, i + batchSize);
-    const creds = await assumeAtmosphereRole(props.atmosphereRoleArn);
+
+    // Initialize permissions tracking for this batch
+    const permissionsManager = new PermissionsTrackingManager(permissionsOptions);
+
+    // If permissions tracking is enabled, set up the collector
+    if (permissionsManager.isEnabled()) {
+      PermissionsCollector.resetInstance();
+      const collector = PermissionsCollector.getInstance();
+      collector.reset();
+    }
+
+    const creds = await assumeAtmosphereRole(props.atmosphereRoleArn, {
+      trackPermissions: permissionsManager.isEnabled(),
+    });
     const allocation = await AtmosphereAllocation.acquire({
       endpoint: props.endpoint,
       pool: props.pool,
@@ -44,11 +78,31 @@ export const deployIntegTests = async (props: {
         AWS_ACCOUNT_ID: allocation.allocation.environment.account,
         TARGET_BRANCH_COMMIT: process.env.TARGET_BRANCH_COMMIT,
         SOURCE_BRANCH_COMMIT: process.env.SOURCE_BRANCH_COMMIT,
+        // Pass permissions tracking options to child processes
+        CDK_PERMISSIONS_TRACKING_ENABLED: permissionsManager.isEnabled() ? 'true' : 'false',
+        CDK_PERMISSIONS_SKIP_VALIDATION: permissionsManager.isValidationSkipped() ? 'true' : 'false',
+        CDK_PERMISSIONS_UPDATE_SNAPSHOT: permissionsManager.shouldUpdateSnapshot() ? 'true' : 'false',
       };
 
       await bootstrap(env);
       await deployIntegrationTest(env, batch);
       outcome = 'success';
+
+      // Validate permissions snapshots for each test in the batch
+      if (permissionsManager.isEnabled()) {
+        for (const testPath of batch) {
+          const testName = getTestNameFromPath(testPath);
+          const snapshotDir = getSnapshotDirectoryForTest(testPath);
+
+          permissionsManager.initializeForTest(testName, snapshotDir);
+          const result = permissionsManager.finalize();
+
+          if (!result.passed) {
+            permissionsFailures.push(formatPermissionsError(result));
+            hasFailure = true;
+          }
+        }
+      }
     } catch (e) {
       console.error(e);
       hasFailure = true;
@@ -70,13 +124,35 @@ export const deployIntegTests = async (props: {
     }
   }
 
+  // Output all permissions failures at the end
+  if (permissionsFailures.length > 0) {
+    console.error('\n\n=== PERMISSIONS SNAPSHOT FAILURES ===\n');
+    for (const failure of permissionsFailures) {
+      console.error(failure);
+    }
+  }
+
   if (hasFailure) {
     throw Error('Deployment integration test did not pass');
   }
 };
 
-export const assumeAtmosphereRole = async (roleArn: string) => {
+/**
+ * Options for assuming the Atmosphere role.
+ */
+interface AssumeRoleOptions {
+  /** Whether to track permissions for this operation */
+  trackPermissions?: boolean;
+}
+
+export const assumeAtmosphereRole = async (roleArn: string, options: AssumeRoleOptions = {}) => {
   const sts = new STSClient({});
+
+  // Attach permissions middleware if tracking is enabled
+  if (options.trackPermissions !== false) {
+    sts.middlewareStack.use(createPermissionsMiddleware());
+  }
+
   const response = await sts.send(new AssumeRoleCommand({
     RoleArn: roleArn,
     RoleSessionName: 'run-tests@aws-cdk-deployment-integ',
@@ -114,3 +190,4 @@ export const deployIntegrationTest = async (env: NodeJS.ProcessEnv, snapshotPath
     else reject(new Error(`Integration tests failed with exit code ${code}`));
   }));
 };
+

@@ -70,7 +70,7 @@ describe('Run Integration Tests with Atmosphere', () => {
     jest.spyOn(mockAtmosphereAllocation, 'release');
     jest.spyOn(integRunner, 'deployIntegrationTest').mockImplementation(async () => {});
     jest.spyOn(integRunner, 'bootstrap').mockImplementation(async () => {});
-    jest.spyOn(integRunner, 'assumeAtmosphereRole').mockImplementation(async (_roleArn: string) => ({
+    jest.spyOn(integRunner, 'assumeAtmosphereRole').mockImplementation(async (_roleArn: string, _options?: { trackPermissions?: boolean }) => ({
       AccessKeyId: env.AWS_ACCESS_KEY_ID,
       SecretAccessKey: env.AWS_SECRET_ACCESS_KEY,
       SessionToken: env.AWS_SESSION_TOKEN,
@@ -80,12 +80,12 @@ describe('Run Integration Tests with Atmosphere', () => {
   });
 
   test('successful integration test', async () => {
-    await integRunner.deployIntegTests({ atmosphereRoleArn, endpoint, pool });
+    await integRunner.deployIntegTests({ atmosphereRoleArn, endpoint, pool, permissionsTracking: { enabled: false } });
     validateSnapshotRun({ batchSize: 3 });
   });
 
   test('successful integration test with a non-default batch size', async () => {
-    await integRunner.deployIntegTests({ atmosphereRoleArn, endpoint, pool, batchSize: 1 });
+    await integRunner.deployIntegTests({ atmosphereRoleArn, endpoint, pool, batchSize: 1, permissionsTracking: { enabled: false } });
     validateSnapshotRun({ batchSize: 1 });
   });
 
@@ -94,7 +94,7 @@ describe('Run Integration Tests with Atmosphere', () => {
       return Promise.reject(new Error('Integration tests failed with exit code 1'));
     });
 
-    await expect(integRunner.deployIntegTests({ atmosphereRoleArn, endpoint, pool })).rejects.toThrow(
+    await expect(integRunner.deployIntegTests({ atmosphereRoleArn, endpoint, pool, permissionsTracking: { enabled: false } })).rejects.toThrow(
       'Deployment integration test did not pass',
     );
 
@@ -112,7 +112,7 @@ describe('Run Integration Tests with Atmosphere', () => {
 
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-    await expect(integRunner.deployIntegTests({ atmosphereRoleArn, endpoint, pool })).rejects.toThrow(
+    await expect(integRunner.deployIntegTests({ atmosphereRoleArn, endpoint, pool, permissionsTracking: { enabled: false } })).rejects.toThrow(
       'Deployment integration test did not pass',
     );
 
@@ -120,6 +120,32 @@ describe('Run Integration Tests with Atmosphere', () => {
 
     consoleSpy.mockRestore();
 
+    validateSnapshotRun({ batchSize: 3 });
+  });
+
+  test('integration test with permissions tracking enabled', async () => {
+    await integRunner.deployIntegTests({
+      atmosphereRoleArn,
+      endpoint,
+      pool,
+      permissionsTracking: {
+        enabled: true,
+        skipValidation: true,
+      },
+    });
+    validateSnapshotRun({ batchSize: 3 });
+  });
+
+  test('integration test with update permissions snapshot', async () => {
+    await integRunner.deployIntegTests({
+      atmosphereRoleArn,
+      endpoint,
+      pool,
+      permissionsTracking: {
+        enabled: true,
+        updateSnapshot: true,
+      },
+    });
     validateSnapshotRun({ batchSize: 3 });
   });
 });
