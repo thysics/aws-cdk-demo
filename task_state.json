@@ -31,7 +31,7 @@
       "id": "FEAT-002",
       "type": "feat",
       "description": "Integrate permissions recorder into integration test execution workflow and write permissions snapshot files",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Modify 'tools/@aws-cdk/integration-test-deployment/lib/integration-test-runner.ts' to import and initialize PermissionsRecorder",
         "Start recording before each integration test batch execution in deployIntegrationTest()",

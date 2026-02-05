@@ -1,30 +1,8 @@
 import type { Pluggable } from '@smithy/types';
 import { createPermissionsMiddleware } from './middleware';
+import { PermissionsSnapshot, SNAPSHOT_VERSION } from './types';
 
-/**
- * Snapshot version for forward compatibility
- */
-const SNAPSHOT_VERSION = '1.0';
-
-/**
- * Interface representing a permissions snapshot
- */
-export interface PermissionsSnapshot {
-  /**
-   * Version of the snapshot format
-   */
-  readonly version: string;
-
-  /**
-   * List of IAM role ARNs that were assumed
-   */
-  readonly roles: string[];
-
-  /**
-   * Map of service:action to call count
-   */
-  readonly actions: Record<string, number>;
-}
+export { PermissionsSnapshot };
 
 /**
  * Records AWS SDK v3 API calls and assumed roles during test execution.

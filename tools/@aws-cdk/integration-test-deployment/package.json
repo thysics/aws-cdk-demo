@@ -17,6 +17,7 @@
     "integration-test-deployment": "node bin/index.js"
   },
   "dependencies": {
+    "@aws-cdk/permissions-recorder": "0.0.0",
     "@aws-sdk/client-sts": "3.632.0",
     "@cdklabs/cdk-atmosphere-client": "^0.0.85"
   },
