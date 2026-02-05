@@ -575,3 +575,224 @@ const describe = testCase.assertions.awsApiCall('StepFunctions', 'describeExecut
 });
 ```
 
+## Permissions Snapshot Testing
+
+The `integ-tests` library provides utilities for recording and verifying IAM permissions
+used during integration test execution. This helps catch changes in IAM requirements
+that could break customer deployments with strict IAM policies.
+
+### Overview
+
+When enabled, the permissions snapshot feature will:
+
+1. Record all IAM roles that are assumed during test execution
+2. Record all IAM actions that are performed
+3. Store this information as a snapshot file
+4. Fail the test if the snapshot changes unexpectedly
+
+This is particularly useful for organizations with strict IAM policy requirements,
+where any changes to roles or actions could break their deployments.
+
+### Basic Usage
+
+```ts
+import { PermissionsSnapshotTest, instrumentSdkClient } from '@aws-cdk/integ-tests-alpha';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+
+// Create a permissions snapshot test
+const permTest = new PermissionsSnapshotTest({
+  testFilePath: __filename,
+});
+
+// Start recording before making AWS calls
+permTest.startRecording('my-test-name');
+
+// Instrument SDK clients to record their calls
+const s3Client = permTest.instrumentClient(new S3Client({}));
+
+// Make AWS API calls as normal
+await s3Client.send(new PutObjectCommand({
+  Bucket: 'my-bucket',
+  Key: 'test-key',
+  Body: 'Hello World',
+}));
+
+// Stop recording and verify against snapshot
+const result = permTest.stopAndVerify();
+
+if (!result.passed) {
+  console.error('Permissions snapshot test failed!');
+  // The snapshot file shows exactly what changed
+}
+```
+
+### Using the Global Recorder
+
+For simpler use cases, you can use the global recorder:
+
+```ts
+import {
+  getGlobalRecorder,
+  instrumentSdkClient,
+  writeSnapshot,
+  compareSnapshots,
+  readSnapshot,
+} from '@aws-cdk/integ-tests-alpha';
+import { S3Client } from '@aws-sdk/client-s3';
+
+// Get the global recorder
+const recorder = getGlobalRecorder();
+
+// Start recording
+recorder.startRecording('my-test');
+
+// Instrument clients
+const s3 = instrumentSdkClient(new S3Client({}), { recorder });
+
+// ... perform test operations ...
+
+// Get the snapshot
+const snapshot = recorder.stopRecording();
+
+// Compare with existing snapshot
+const expected = readSnapshot('./permissions.snapshot.json');
+if (expected) {
+  const result = compareSnapshots(expected, snapshot);
+  if (!result.matches) {
+    console.error('Permissions changed!');
+    console.error('Added actions:', result.addedActions);
+    console.error('Removed actions:', result.removedActions);
+  }
+} else {
+  // Create initial snapshot
+  writeSnapshot('./permissions.snapshot.json', snapshot);
+}
+```
+
+### Functional Wrapper
+
+For one-off tests, you can use the functional wrapper:
+
+```ts
+import { withPermissionsSnapshot } from '@aws-cdk/integ-tests-alpha';
+
+const { result, snapshotResult } = await withPermissionsSnapshot(async () => {
+  // Your test code here
+  const s3 = new S3Client({});
+  await s3.send(new PutObjectCommand({ /* ... */ }));
+  return 'test completed';
+}, {
+  testFilePath: __filename,
+});
+
+console.log('Test result:', result);
+console.log('Snapshot:', snapshotResult.passed ? 'passed' : 'failed');
+```
+
+### Snapshot Format
+
+The permissions snapshot is stored as a JSON file with the following structure:
+
+```json
+{
+  "version": "1.0.0",
+  "testName": "my-integration-test",
+  "assumedRoles": [
+    {
+      "roleArn": "arn:aws:iam::123456789012:role/DeployRole",
+      "sessionName": "cdk-deploy"
+    }
+  ],
+  "iamActions": [
+    {
+      "service": "cloudformation",
+      "action": "CreateStack"
+    },
+    {
+      "service": "s3",
+      "action": "PutObject"
+    }
+  ]
+}
+```
+
+### Configuration Options
+
+#### PermissionsRecorderOptions
+
+```ts
+const recorder = new PermissionsRecorder({
+  // Include resource ARNs in the snapshot (may contain account-specific info)
+  includeResourceArns: false,
+  
+  // Include timestamps (set to false for deterministic comparison)
+  includeTimestamps: false,
+  
+  // Services to exclude from recording
+  excludeServices: ['cloudwatch'],
+  
+  // Specific actions to exclude
+  excludeActions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+});
+```
+
+#### SnapshotComparisonOptions
+
+```ts
+const result = compareSnapshots(expected, actual, {
+  // Ignore differences in resource ARNs
+  ignoreResourceArns: true,
+  
+  // Allow additional actions not in the expected snapshot
+  allowAdditionalActions: false,
+  
+  // Allow additional roles not in the expected snapshot
+  allowAdditionalRoles: false,
+});
+```
+
+### Updating Snapshots
+
+When IAM requirements legitimately change, you can update the snapshot by:
+
+1. Setting the `UPDATE_SNAPSHOTS` environment variable:
+   ```bash
+   UPDATE_SNAPSHOTS=true yarn integ
+   ```
+
+2. Or using the `updateSnapshots` option:
+   ```ts
+   const permTest = new PermissionsSnapshotTest({
+     testFilePath: __filename,
+     updateSnapshots: true,
+   });
+   ```
+
+### Default Exclusions
+
+By default, the following are excluded from recording to reduce noise:
+
+**Excluded Services:**
+- `cloudwatch` (metrics are often published automatically)
+
+**Excluded Actions:**
+- `logs:CreateLogGroup`
+- `logs:CreateLogStream`
+- `logs:PutLogEvents`
+- `logs:DescribeLogGroups`
+- `logs:DescribeLogStreams`
+
+You can customize these exclusions using the recorder options.
+
+### Best Practices
+
+1. **Review snapshot changes carefully**: When a snapshot changes, review the diff to understand what IAM changes were introduced and whether they are expected.
+
+2. **Document IAM changes**: When updating snapshots due to legitimate changes, document why the IAM requirements changed in your PR description.
+
+3. **Use meaningful test names**: Provide descriptive test names to make it easier to identify which test introduced IAM changes.
+
+4. **Consider resource ARNs**: By default, resource ARNs are not included to avoid account-specific values. Enable them only if you need to track resource-level permissions.
+
+5. **Communicate changes**: Changes to IAM requirements may affect customers with strict policies. Consider communicating significant changes in release notes.
+
