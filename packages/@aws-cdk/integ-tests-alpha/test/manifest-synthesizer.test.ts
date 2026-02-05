@@ -172,4 +172,68 @@ describe(IntegManifestSynthesizer, () => {
       },
     });
   });
+
+  test('with enablePermissionsSnapshot', () => {
+    // GIVEN
+    const app = new App();
+    const stack = new Stack(app, 'stack');
+
+    // WHEN
+    new IntegTest(app, 'Integ', {
+      testCases: [stack],
+      enablePermissionsSnapshot: true,
+    });
+    const integAssembly = app.synth();
+    const integManifest = Manifest.loadIntegManifest(path.join(integAssembly.directory, 'integ.json'));
+
+    // THEN
+    expect(integManifest).toEqual({
+      version: Manifest.version(),
+      minimumCliVersion: Manifest.cliVersion(),
+      testCases: {
+        ['Integ/DefaultTest']: {
+          assertionStack: 'Integ/DefaultTest/DeployAssert',
+          assertionStackName: 'IntegDefaultTestDeployAssert4E6713E1',
+          stacks: ['stack'],
+          enablePermissionsSnapshot: true,
+        },
+      },
+    });
+  });
+
+  test('enablePermissionsSnapshot defaults to false', () => {
+    // GIVEN
+    const app = new App();
+    const stack = new Stack(app, 'stack');
+
+    // WHEN
+    new IntegTest(app, 'Integ', {
+      testCases: [stack],
+    });
+    const integAssembly = app.synth();
+    const integManifest = Manifest.loadIntegManifest(path.join(integAssembly.directory, 'integ.json'));
+
+    // THEN - enablePermissionsSnapshot should not be present when false (default)
+    expect(integManifest.testCases['Integ/DefaultTest']).not.toHaveProperty('enablePermissionsSnapshot');
+  });
+
+  test('enablePermissionsSnapshot with IntegTestCaseStack', () => {
+    // GIVEN
+    const app = new App();
+    const stack = new Stack(app, 'stack');
+    const testCaseWithPermissions = new IntegTestCaseStack(app, 'CaseWithPermissions', {
+      enablePermissionsSnapshot: true,
+    });
+
+    // WHEN
+    new IntegTest(app, 'Integ', {
+      testCases: [stack, testCaseWithPermissions],
+    });
+    const integAssembly = app.synth();
+    const integManifest = Manifest.loadIntegManifest(path.join(integAssembly.directory, 'integ.json'));
+
+    // THEN
+    expect(integManifest.testCases['CaseWithPermissions/CaseWithPermissionsTestCase']).toHaveProperty('enablePermissionsSnapshot', true);
+    expect(integManifest.testCases['Integ/DefaultTest']).not.toHaveProperty('enablePermissionsSnapshot');
+  });
 });

@@ -24,6 +24,15 @@ export interface IntegTestCaseProps extends TestOptions {
    * @default - a stack is created for you
    */
   readonly assertionStack?: Stack;
+
+  /**
+   * Enable permissions snapshot testing for this test case.
+   * When enabled, all IAM actions and role assumptions during test execution
+   * will be recorded and compared against a stored snapshot.
+   *
+   * @default false
+   */
+  readonly enablePermissionsSnapshot?: boolean;
 }
 
 /**
@@ -41,11 +50,17 @@ export class IntegTestCase extends Construct {
 
   private readonly _assert: DeployAssert;
 
+  /**
+   * Whether permissions snapshot testing is enabled for this test case
+   */
+  private readonly _enablePermissionsSnapshot: boolean;
+
   constructor(scope: Construct, id: string, private readonly props: IntegTestCaseProps) {
     super(scope, id);
 
     this._assert = new DeployAssert(this, { stack: props.assertionStack });
     this.assertions = this._assert;
+    this._enablePermissionsSnapshot = props.enablePermissionsSnapshot ?? false;
   }
 
   /**
@@ -60,19 +75,35 @@ export class IntegTestCase extends Construct {
   }
 
   private toTestCase(props: IntegTestCaseProps): TestCase {
-    return {
+    const testCase: TestCase = {
       ...props,
       assertionStack: this._assert.scope.node.path,
       assertionStackName: this._assert.scope.stackName,
       stacks: props.stacks.map(s => s.node.path),
     };
+
+    // Add enablePermissionsSnapshot to the test case if it's enabled
+    if (this._enablePermissionsSnapshot) {
+      (testCase as any).enablePermissionsSnapshot = this._enablePermissionsSnapshot;
+    }
+
+    return testCase;
   }
 }
 
 /**
  * Properties of an integration test case stack
  */
-export interface IntegTestCaseStackProps extends TestOptions, StackProps { }
+export interface IntegTestCaseStackProps extends TestOptions, StackProps {
+  /**
+   * Enable permissions snapshot testing for this test case.
+   * When enabled, all IAM actions and role assumptions during test execution
+   * will be recorded and compared against a stored snapshot.
+   *
+   * @default false
+   */
+  readonly enablePermissionsSnapshot?: boolean;
+}
 
 /**
  * An integration test case stack. Allows the definition of test properties
@@ -140,6 +171,15 @@ export interface IntegTestProps extends TestOptions {
    * @default - a stack is created for you
    */
   readonly assertionStack?: Stack;
+
+  /**
+   * Enable permissions snapshot testing for this test case.
+   * When enabled, all IAM actions and role assumptions during test execution
+   * will be recorded and compared against a stored snapshot.
+   *
+   * @default false
+   */
+  readonly enablePermissionsSnapshot?: boolean;
 }
 
 /**
@@ -166,6 +206,7 @@ export class IntegTest extends Construct {
       cdkCommandOptions: props.cdkCommandOptions,
       stackUpdateWorkflow: props.stackUpdateWorkflow,
       assertionStack: props.assertionStack,
+      enablePermissionsSnapshot: props.enablePermissionsSnapshot,
     });
     this.assertions = defaultTestCase.assertions;
 

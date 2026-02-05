@@ -73,7 +73,7 @@ interface StackUnderTestProps extends StackProps {
 class StackUnderTest extends Stack {
   constructor(scope: Construct, id: string, props: StackUnderTestProps) {
     super(scope, id, props);
-	
+        
     new lambda.Function(this, 'Handler', {
       runtime: lambda.Runtime.NODEJS_LATEST,
       handler: 'index.handler',
@@ -97,7 +97,7 @@ interface StackUnderTestProps extends StackProps {
 class StackUnderTest extends Stack {
   constructor(scope: Construct, id: string, props: StackUnderTestProps) {
     super(scope, id, props);
-	
+        
     new lambda.Function(this, 'Handler', {
       runtime: lambda.Runtime.NODEJS_LATEST,
       handler: 'index.handler',
@@ -422,10 +422,10 @@ message.expect(ExpectedResult.objectLike({
       Payload: Match.serializedJson({ key: 'value' }),
     },
     {
-	  Body: {
-	    Values: Match.arrayWith([{ Asdf: 3 }]),
-		Message: Match.stringLikeRegexp('message'),
-	  },
+          Body: {
+            Values: Match.arrayWith([{ Asdf: 3 }]),
+                Message: Match.stringLikeRegexp('message'),
+          },
     },
   ]),
 }));
@@ -573,5 +573,100 @@ const describe = testCase.assertions.awsApiCall('StepFunctions', 'describeExecut
   interval: Duration.seconds(15),
   backoffRate: 3,
 });
+```
+
+## Permissions Snapshot Testing
+
+This library provides permissions snapshot testing capabilities to track and verify IAM permissions used during integration test execution. This helps ensure that:
+
+- Tests don't unexpectedly require new permissions
+- Permission changes are reviewed and intentional
+- Security requirements are maintained over time
+
+### Enabling Permissions Snapshots
+
+Enable permissions snapshot testing by setting `enablePermissionsSnapshot: true` when creating an `IntegTest`:
+
+```ts
+declare const app: App;
+declare const stack: Stack;
+
+const integ = new IntegTest(app, 'Integ', {
+  testCases: [stack],
+  enablePermissionsSnapshot: true,
+});
+```
+
+You can also enable it on individual `IntegTestCaseStack` instances:
+
+```ts
+declare const app: App;
+declare const stackUnderTest: Stack;
+
+const testCaseWithPermissions = new IntegTestCaseStack(app, 'TestCaseWithPermissions', {
+  enablePermissionsSnapshot: true,
+});
+
+new IntegTest(app, 'Integ', {
+  testCases: [stackUnderTest, testCaseWithPermissions],
+});
+```
+
+### How It Works
+
+When permissions snapshot testing is enabled:
+
+1. During test execution, all AWS SDK calls are intercepted and tracked
+2. IAM actions (e.g., `s3:PutObject`, `lambda:Invoke`) are extracted from SDK calls
+3. STS role assumptions are captured with their role ARNs
+4. After execution, the permissions are saved to `permissions.snapshot.json` in the snapshot directory
+5. On subsequent runs, the new permissions are compared against the stored snapshot
+6. The test fails if permissions have changed (unless running in update mode)
+
+### Permissions Tracking Classes
+
+The following classes are available for programmatic use:
+
+#### PermissionsTracker
+
+Intercepts AWS SDK calls and tracks permissions:
+
+```ts
+import { PermissionsTracker } from '@aws-cdk/integ-tests-alpha';
+
+const tracker = new PermissionsTracker('myTestCase');
+
+// The tracker provides middleware that can be attached to AWS SDK clients
+// This is automatically done by the test runner when enablePermissionsSnapshot is true
+```
+
+#### PermissionsSnapshotWriter
+
+Writes permission snapshots to disk:
+
+```ts
+import { PermissionsSnapshotWriter } from '@aws-cdk/integ-tests-alpha';
+
+const writer = new PermissionsSnapshotWriter('/path/to/snapshot/dir');
+writer.write({
+  rolesAssumed: ['arn:aws:iam::123456789012:role/MyRole'],
+  actionsPerformed: ['s3:GetObject', 's3:PutObject'],
+});
+```
+
+#### PermissionsSnapshotComparator
+
+Compares two permission snapshots and generates diffs:
+
+```ts
+import { PermissionsSnapshotComparator } from '@aws-cdk/integ-tests-alpha';
+
+const comparator = new PermissionsSnapshotComparator();
+const result = comparator.compare(expectedSnapshot, actualSnapshot);
+
+if (!result.isEqual) {
+  console.log('Permissions changed:');
+  console.log(result.diff);
+}
 ```
 
