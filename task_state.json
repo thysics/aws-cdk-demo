@@ -7,7 +7,7 @@
       "id": "FEAT-001",
       "type": "feat",
       "description": "Create AWS SDK v3 middleware for permission tracking that intercepts API calls and captures IAM actions and assumed roles",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Create new package `@aws-cdk/integ-permissions-tracker` under `tools/@aws-cdk/` with TypeScript configuration",
         "Implement `PermissionMiddleware` class that hooks into AWS SDK v3 middleware stack",
