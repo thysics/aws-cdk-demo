@@ -517,6 +517,22 @@ Examples:
 * [integ.destinations.ts](https://github.com/aws/aws-cdk/blob/main/packages/%40aws-cdk-testing/framework-integ/test/aws-lambda-destinations/test/integ.destinations.ts#L7)
 * [integ.put-events.ts](https://github.com/aws/aws-cdk/blob/main/packages/%40aws-cdk-testing/framework-integ/test/aws-stepfunctions-tasks/test/eventbridge/integ.put-events.ts)
 
+**Permissions Snapshot Requirement**
+
+Integration tests automatically generate a `permissions.snapshot.json` file that records all AWS API calls
+and IAM role assumptions made during test execution. This snapshot serves as a regression detector for
+permission changes.
+
+When your PR modifies permissions (new API calls, new roles, etc.), you must:
+
+1. Review the permissions diff to ensure changes are intentional
+2. Update the permissions snapshot using `--update-permissions-snapshot` flag
+3. Include the updated `permissions.snapshot.json` in your commit
+4. Document in your PR description why permissions changed
+
+See the [Permissions Snapshot Testing](./INTEGRATION_TESTS.md#permissions-snapshot-testing) section in
+INTEGRATION_TESTS.md for detailed documentation on the snapshot format, CLI flags, and troubleshooting.
+
 **What if you cannot run integration tests**
 
 If you are working on a PR that requires an update to an integration test and you are unable

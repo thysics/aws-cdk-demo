@@ -13,6 +13,16 @@ on what type of changes require integrations tests and how you should write inte
     - [Assertions](#assertions)
   - [Running Integration Tests](#running-integration-tests)
     - [Running large numbers of Tests](#running-large-numbers-of-tests)
+  - [Permissions Snapshot Testing](#permissions-snapshot-testing)
+    - [Purpose and Benefits](#purpose-and-benefits)
+    - [How It Works](#how-it-works)
+    - [Snapshot File Format](#snapshot-file-format)
+    - [Complete Annotated Example](#complete-annotated-example)
+    - [CLI Flags for Permissions Snapshots](#cli-flags-for-permissions-snapshots)
+    - [Interpreting Permissions Diffs](#interpreting-permissions-diffs)
+    - [Determining if Changes are Expected](#determining-if-changes-are-expected)
+    - [Updating Permissions Snapshots](#updating-permissions-snapshots)
+    - [Troubleshooting Common Issues](#troubleshooting-common-issues)
 
 ## What are CDK Integration Tests
 
@@ -338,3 +348,300 @@ yarn integ-runner --directory packages/@aws-cdk --update-on-failed \
 
 When using both `--parallel-regions` and `--profiles` it will execute (regions*profiles) tests in parallel (in this example 12)
 If you want to execute more than 16 tests in parallel you can pass a higher value to `--max-workers`.
+
+## Permissions Snapshot Testing
+
+Permissions snapshot testing is a feature that automatically tracks and records all AWS API calls and IAM role assumptions made during integration test execution. This provides visibility into the permissions required by CDK constructs and helps detect unintended changes in permission requirements.
+
+### Purpose and Benefits
+
+- **Regression detection**: Automatically detect when code changes result in new or removed AWS API calls
+- **Security review**: Provides clear visibility into what permissions your constructs actually require
+- **Documentation**: Creates a permanent record of permissions used by each integration test
+- **Least privilege verification**: Helps ensure constructs request only the permissions they need
+
+### How It Works
+
+When you run an integration test, the permissions tracker:
+
+1. **Intercepts SDK calls**: Uses AWS SDK v3 middleware to capture every API call
+2. **Tracks role assumptions**: Records STS AssumeRole calls to maintain a role chain
+3. **Generates snapshot**: Creates a `permissions.snapshot.json` file in the test's snapshot directory
+4. **Compares on subsequent runs**: Fails the test if permissions differ from the stored snapshot
+
+### Snapshot File Format
+
+The `permissions.snapshot.json` file is a JSON document with the following structure:
+
+```json
+{
+  "version": "1.0",
+  "testName": "my-integration-test",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "rolesAssumed": [
+    {
+      "roleArn": "arn:aws:iam::123456789012:role/TestRole",
+      "sessionName": "test-session",
+      "durationSeconds": 3600,
+      "assumedBy": "arn:aws:iam::123456789012:user/TestUser"
+    }
+  ],
+  "actionsPerformed": [
+    {
+      "service": "s3",
+      "action": "GetObject",
+      "region": "us-east-1"
+    },
+    {
+      "service": "cloudformation",
+      "action": "CreateStack",
+      "region": "us-east-1"
+    }
+  ]
+}
+```
+
+**Field Descriptions:**
+
+| Field | Description |
+|-------|-------------|
+| `version` | Schema version for the snapshot format (currently "1.0") |
+| `testName` | Name of the integration test that generated this snapshot |
+| `timestamp` | ISO 8601 timestamp when the snapshot was generated |
+| `rolesAssumed` | Array of IAM roles that were assumed during test execution |
+| `rolesAssumed[].roleArn` | The ARN of the assumed role |
+| `rolesAssumed[].sessionName` | The session name used when assuming the role |
+| `rolesAssumed[].durationSeconds` | Session duration in seconds (if specified) |
+| `rolesAssumed[].assumedBy` | The principal (user/role) that assumed this role |
+| `actionsPerformed` | Array of unique AWS API actions performed during the test |
+| `actionsPerformed[].service` | AWS service name (e.g., 's3', 'cloudformation', 'lambda') |
+| `actionsPerformed[].action` | API action name (e.g., 'GetObject', 'CreateStack') |
+| `actionsPerformed[].region` | AWS region where the action was performed |
+
+### Complete Annotated Example
+
+Here is a complete example of a typical permissions snapshot with annotations explaining each part:
+
+```json
+{
+  // Schema version - used for forward compatibility
+  "version": "1.0",
+  
+  // Test identifier - matches the integration test file name
+  "testName": "integ.lambda-with-s3",
+  
+  // When this snapshot was captured
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  
+  // Roles assumed during test execution (in order)
+  "rolesAssumed": [
+    {
+      // The deployment role assumed by CDK
+      "roleArn": "arn:aws:iam::123456789012:role/cdk-hnb659fds-deploy-role-123456789012-us-east-1",
+      "sessionName": "aws-cdk-integ-test",
+      "durationSeconds": 3600,
+      // The original caller identity
+      "assumedBy": "arn:aws:iam::123456789012:user/developer"
+    },
+    {
+      // The CloudFormation execution role
+      "roleArn": "arn:aws:iam::123456789012:role/cdk-hnb659fds-cfn-exec-role-123456789012-us-east-1",
+      "sessionName": "AWSCloudFormation",
+      // This role was assumed by the deploy role
+      "assumedBy": "arn:aws:iam::123456789012:role/cdk-hnb659fds-deploy-role-123456789012-us-east-1"
+    }
+  ],
+  
+  // All unique AWS API actions performed (sorted alphabetically)
+  "actionsPerformed": [
+    {
+      // CloudFormation operations for stack management
+      "service": "cloudformation",
+      "action": "CreateStack",
+      "region": "us-east-1"
+    },
+    {
+      "service": "cloudformation",
+      "action": "DescribeStacks",
+      "region": "us-east-1"
+    },
+    {
+      "service": "cloudformation",
+      "action": "DescribeStackEvents",
+      "region": "us-east-1"
+    },
+    {
+      // Lambda function creation
+      "service": "lambda",
+      "action": "CreateFunction",
+      "region": "us-east-1"
+    },
+    {
+      // S3 operations for asset uploads
+      "service": "s3",
+      "action": "GetBucketLocation",
+      "region": "us-east-1"
+    },
+    {
+      "service": "s3",
+      "action": "PutObject",
+      "region": "us-east-1"
+    },
+    {
+      // STS calls for role assumption
+      "service": "sts",
+      "action": "AssumeRole",
+      "region": "us-east-1"
+    }
+  ]
+}
+```
+
+### CLI Flags for Permissions Snapshots
+
+The integration test runner supports the following flags for managing permissions snapshots:
+
+#### `--update-permissions-snapshot`
+
+Updates the permissions snapshot file when differences are detected. Use this flag when:
+- You've intentionally added or removed API calls in your construct
+- You're creating a new integration test for the first time
+- You've reviewed the diff and confirmed the changes are expected
+
+```bash
+yarn integ test/aws-lambda/test/integ.lambda.js --update-permissions-snapshot
+```
+
+#### `--skip-permissions-check`
+
+Bypasses permissions snapshot validation entirely. Use this flag when:
+- You're debugging a test and don't want snapshot failures to block you
+- Running tests in an environment where permissions tracking isn't needed
+- The permissions snapshot feature is causing issues you need to investigate
+
+```bash
+yarn integ test/aws-lambda/test/integ.lambda.js --skip-permissions-check
+```
+
+### Interpreting Permissions Diffs
+
+When a permissions snapshot mismatch occurs, the test failure output shows a detailed diff. Here's how to interpret it:
+
+**Example diff output:**
+```
+✗ Permissions snapshot mismatch
+
+New roles assumed (1):
+  + arn:aws:iam::123456789012:role/NewRole
+      session: new-session
+
+New actions performed (2):
+  + dynamodb:PutItem (us-east-1)
+  + dynamodb:GetItem (us-east-1)
+
+Removed actions (1):
+  - s3:ListBucket (us-east-1)
+
+Total changes: 4
+```
+
+**Interpreting changes:**
+
+| Change Type | What It Means | Common Causes |
+|-------------|---------------|---------------|
+| **New roles assumed** | A new IAM role is being assumed that wasn't before | Added cross-account access, new service integration |
+| **Removed roles** | A role that was assumed is no longer used | Simplified architecture, removed dependency |
+| **New actions** | New AWS API calls are being made | Added functionality, new resource types |
+| **Removed actions** | API calls that were made are no longer occurring | Removed functionality, optimized code |
+
+### Determining if Changes are Expected
+
+Follow these steps to evaluate permissions changes:
+
+1. **Review your code changes**: What functionality did you add, modify, or remove?
+2. **Map changes to permissions**: New resources typically require new actions (e.g., adding DynamoDB table → `dynamodb:*` actions)
+3. **Check for unintended changes**: Look for unexpected permissions that might indicate bugs
+4. **Verify security implications**: Ensure new permissions align with least privilege principles
+
+**Expected changes:**
+- Adding a new S3 bucket → expect `s3:CreateBucket`, `s3:PutBucketPolicy`, etc.
+- Adding Lambda event source → expect new IAM role for event source mapping
+- Removing a resource → expect removal of related actions
+
+**Unexpected changes to investigate:**
+- Permissions for services you didn't add code for
+- Role assumptions to accounts you don't recognize
+- Actions that seem unrelated to your changes
+
+### Updating Permissions Snapshots
+
+When you've confirmed that permissions changes are intentional:
+
+1. **Review the diff carefully**:
+   ```bash
+   yarn integ test/aws-lambda/test/integ.lambda.js
+   # Review the permissions diff in the output
+   ```
+
+2. **Update the snapshot**:
+   ```bash
+   yarn integ test/aws-lambda/test/integ.lambda.js --update-permissions-snapshot
+   ```
+
+3. **Commit the updated snapshot**:
+   ```bash
+   git add test/aws-lambda/test/integ.lambda.js.snapshot/permissions.snapshot.json
+   git commit -m "chore: update permissions snapshot for new dynamodb integration"
+   ```
+
+4. **Document in your PR**: Explain why permissions changed in your PR description
+
+### Troubleshooting Common Issues
+
+#### Test fails with "permissions snapshot mismatch" but I didn't change permissions
+
+**Possible causes:**
+- Non-deterministic resource naming affecting action patterns
+- Environment differences (different AWS account, region)
+- Transient API calls that don't always occur
+
+**Solutions:**
+- Ensure deterministic resource naming in your test
+- Review if the diff shows legitimate environment differences
+- If calls are non-deterministic, consider excluding them from tracking
+
+#### Snapshot shows unexpected role assumptions
+
+**Possible causes:**
+- CDK bootstrap roles being captured
+- Cross-account access you weren't aware of
+- Service-linked role assumptions
+
+**Solutions:**
+- Review the role chain to understand who assumed what
+- Verify the roles are expected for your construct's functionality
+- Check if the roles are CDK deployment infrastructure vs. your construct
+
+#### Empty permissions snapshot
+
+**Possible causes:**
+- Middleware not properly attached to SDK clients
+- Test not making any AWS API calls
+- Permissions collector not initialized
+
+**Solutions:**
+- Ensure `createPermissionsMiddleware()` is attached to all SDK clients used
+- Verify your test actually deploys resources
+- Check that `PermissionsCollector.getInstance()` is called before test execution
+
+#### Permissions snapshot shows API calls I didn't expect
+
+**Possible causes:**
+- SDK retry calls being captured
+- Polling operations for resource creation
+- Implicit API calls from higher-level constructs
+
+**Solutions:**
+- Review the construct's implementation for implicit dependencies
+- Check if calls are expected CloudFormation polling behavior
+- Verify you understand all resources created by your construct
