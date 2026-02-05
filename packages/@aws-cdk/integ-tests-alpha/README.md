@@ -575,3 +575,146 @@ const describe = testCase.assertions.awsApiCall('StepFunctions', 'describeExecut
 });
 ```
 
+
+## Permissions Snapshot Testing
+
+This library provides a permissions snapshot feature that records all IAM roles assumed and IAM actions performed during integration test execution. This is useful for organizations with strict IAM policy requirements who need to track when CDK CLI behavior changes in ways that might affect their IAM policies.
+
+See [GitHub Issue #32088](https://github.com/aws/aws-cdk/issues/32088) for more details on the motivation for this feature.
+
+### Overview
+
+The permissions snapshot feature:
+1. Records all AWS API calls made during test execution
+2. Records all IAM role assumptions (STS AssumeRole)
+3. Saves the data as a snapshot file
+4. Compares future test runs against the snapshot and fails if there are changes
+
+### Basic Usage
+
+You can enable permissions tracking in your integration tests using the `withPermissionsTracking` helper:
+
+```ts
+import { withPermissionsTracking } from '@aws-cdk/integ-tests-alpha';
+
+// In your integration test
+const { result, tracking } = await withPermissionsTracking(
+  { testFilePath: __filename },
+  async () => {
+    // Your integration test code here
+    const stack = new Stack(app, 'TestStack');
+    // ... deploy stack ...
+    return 'success';
+  },
+);
+
+console.log(`Snapshot saved to: ${tracking.snapshotPath}`);
+if (!tracking.matched) {
+  console.log(`Changes detected:\n${tracking.changeSummary}`);
+}
+```
+
+### Using the Tracking Context
+
+For more control, you can use the `IntegTestPermissionsContext` directly:
+
+```ts
+import { createPermissionsTrackingContext } from '@aws-cdk/integ-tests-alpha';
+
+const context = createPermissionsTrackingContext({
+  testFilePath: __filename,
+  updateSnapshot: false, // Set to true to update snapshots
+  failOnChange: true,    // Set to false to not fail on changes
+});
+
+context.start();
+
+try {
+  // Your integration test code
+} finally {
+  const result = context.finish();
+}
+```
+
+### Configuration Options
+
+The permissions tracking supports the following options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `testFilePath` | string | Required | Path to the integration test file |
+| `updateSnapshot` | boolean | false | Whether to update the snapshot if it has changed |
+| `snapshotDirectory` | string | Test directory | Custom directory for snapshot files |
+| `failOnChange` | boolean | true | Whether to fail the test if permissions changed |
+| `excludeServices` | string[] | [] | Services to exclude from tracking (e.g., `['cloudwatch']`) |
+| `excludeActions` | string[] | [] | Specific actions to exclude (format: `'service:action'`) |
+
+### Snapshot File Format
+
+The snapshot file is saved as `{test-name}.permissions-snapshot.json` and contains:
+
+```json
+{
+  "version": "1.0.0",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "testName": "integ.my-test",
+  "roles": [
+    {
+      "roleArn": "arn:aws:iam::123456789012:role/DeployRole",
+      "sessionName": "cdk-deploy-session"
+    }
+  ],
+  "actions": [
+    { "service": "cloudformation", "action": "CreateStack", "count": 1 },
+    { "service": "s3", "action": "GetObject", "count": 5 },
+    { "service": "sts", "action": "AssumeRole", "count": 2 }
+  ]
+}
+```
+
+### Using with AWS SDK Middleware
+
+If you want to track permissions for specific AWS SDK clients, you can apply the middleware directly:
+
+```ts
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  applyPermissionsTracking,
+  PermissionsTracker,
+} from '@aws-cdk/integ-tests-alpha';
+
+// Initialize the tracker
+PermissionsTracker.initialize({ testName: 'my-test' });
+
+// Apply tracking to your SDK client
+const s3Client = new S3Client({});
+applyPermissionsTracking(s3Client);
+
+// Now all calls through this client will be tracked
+await s3Client.send(new GetObjectCommand({ Bucket: 'my-bucket', Key: 'my-key' }));
+
+// Get the recorded actions
+const tracker = PermissionsTracker.getInstance();
+const snapshot = tracker?.generateSnapshot();
+```
+
+### Handling Snapshot Changes
+
+When a test fails due to snapshot changes, you have several options:
+
+1. **Investigate the change**: Review the error message to understand what permissions changed
+2. **Update the snapshot**: If the change is expected, run with `updateSnapshot: true`
+3. **Communicate the change**: The snapshot diff can be used to notify customers about IAM changes
+
+Example error message:
+
+```
+PermissionsSnapshotError: Permissions snapshot has changed for test 'integ.my-test'.
+
+Added actions:
+  + s3:PutObject
+Removed actions:
+  - s3:DeleteObject
+
+To update the snapshot, run the test with --update-snapshots.
+```
