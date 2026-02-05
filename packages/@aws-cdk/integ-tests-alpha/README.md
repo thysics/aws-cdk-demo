@@ -73,7 +73,7 @@ interface StackUnderTestProps extends StackProps {
 class StackUnderTest extends Stack {
   constructor(scope: Construct, id: string, props: StackUnderTestProps) {
     super(scope, id, props);
-	
+        
     new lambda.Function(this, 'Handler', {
       runtime: lambda.Runtime.NODEJS_LATEST,
       handler: 'index.handler',
@@ -97,7 +97,7 @@ interface StackUnderTestProps extends StackProps {
 class StackUnderTest extends Stack {
   constructor(scope: Construct, id: string, props: StackUnderTestProps) {
     super(scope, id, props);
-	
+        
     new lambda.Function(this, 'Handler', {
       runtime: lambda.Runtime.NODEJS_LATEST,
       handler: 'index.handler',
@@ -422,10 +422,10 @@ message.expect(ExpectedResult.objectLike({
       Payload: Match.serializedJson({ key: 'value' }),
     },
     {
-	  Body: {
-	    Values: Match.arrayWith([{ Asdf: 3 }]),
-		Message: Match.stringLikeRegexp('message'),
-	  },
+          Body: {
+            Values: Match.arrayWith([{ Asdf: 3 }]),
+                Message: Match.stringLikeRegexp('message'),
+          },
     },
   ]),
 }));
@@ -572,6 +572,123 @@ const describe = testCase.assertions.awsApiCall('StepFunctions', 'describeExecut
   totalTimeout: Duration.minutes(5),
   interval: Duration.seconds(15),
   backoffRate: 3,
+});
+```
+
+## Permissions Snapshot Testing
+
+This library provides experimental support for permissions snapshot testing. This feature
+records all IAM actions performed and roles assumed during integration test execution,
+and stores them as a snapshot file. This helps detect unexpected changes to IAM permissions
+used by the CDK CLI during deployments.
+
+### Use Case
+
+Organizations with strict IAM policy requirements configure roles with only the permissions
+currently required for CLI operations. Any changes to which roles are assumed or which
+actions are performed can break customer deployments. Permissions snapshots help catch
+these changes early in the development process.
+
+### Enabling Permissions Snapshots
+
+Permissions snapshot recording is disabled by default. You can enable it by:
+
+1. Setting the environment variable `CDK_INTEG_PERMISSIONS_SNAPSHOT=true`
+2. Or by explicitly enabling it in the helper options
+
+```ts
+import { IntegTestPermissionsHelper } from '@aws-cdk/integ-tests-alpha';
+
+const permissionsHelper = new IntegTestPermissionsHelper({
+  testName: 'my-integration-test',
+  snapshotDir: './integ.my-test.js.snapshot',
+  enabled: true,
+});
+```
+
+### Using the Permissions Helper
+
+The `IntegTestPermissionsHelper` class provides methods to record and validate permissions:
+
+```ts
+import { IntegTestPermissionsHelper } from '@aws-cdk/integ-tests-alpha';
+
+// Create the helper
+const permissionsHelper = new IntegTestPermissionsHelper({
+  testName: 'my-integration-test',
+  snapshotDir: './integ.my-test.js.snapshot',
+  enabled: true,
+});
+
+// Start recording before running the test
+permissionsHelper.startRecording();
+
+// ... run your integration test here ...
+
+// Stop recording and validate against the baseline
+const result = permissionsHelper.stopAndValidate();
+if (!result.passed) {
+  console.error(`Permissions snapshot mismatch: ${result.summary}`);
+  // Handle the failure appropriately
+}
+```
+
+### Snapshot File Format
+
+The permissions snapshot is stored as `permissions.snapshot.json` alongside other
+snapshot files. It contains:
+
+- **actions**: All IAM actions recorded (service:action pairs)
+- **roleAssumptions**: All IAM roles that were assumed
+- **actionSummary**: A sorted list of unique service:action pairs
+
+Example snapshot file:
+```json
+{
+  "version": "1.0.0",
+  "testName": "my-integration-test",
+  "timestamp": "",
+  "actions": [
+    { "service": "cloudformation", "action": "CreateStack" },
+    { "service": "s3", "action": "PutObject" },
+    { "service": "sts", "action": "AssumeRole" }
+  ],
+  "roleAssumptions": [
+    { "roleArn": "arn:aws:iam::123456789012:role/cdk-deploy-role" }
+  ],
+  "actionSummary": [
+    "cloudformation:CreateStack",
+    "s3:PutObject",
+    "sts:AssumeRole"
+  ]
+}
+```
+
+### Updating Snapshots
+
+When permissions intentionally change, you can update the baseline snapshot by:
+
+1. Setting `CDK_INTEG_UPDATE_PERMISSIONS_SNAPSHOT=true` environment variable
+2. Or by setting `updateSnapshot: true` in the helper options
+
+```ts
+const permissionsHelper = new IntegTestPermissionsHelper({
+  testName: 'my-integration-test',
+  snapshotDir: './integ.my-test.js.snapshot',
+  enabled: true,
+  updateSnapshot: true, // Will update the snapshot on changes
+});
+```
+
+### Using with Decorator Pattern
+
+For convenience, you can use the `withPermissionsRecording` function:
+
+```ts
+import { withPermissionsRecording } from '@aws-cdk/integ-tests-alpha';
+
+await withPermissionsRecording('my-test', './integ.my-test.js.snapshot', async () => {
+  // Run your integration test here
 });
 ```
 
