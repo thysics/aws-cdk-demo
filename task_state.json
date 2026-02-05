@@ -1,0 +1,114 @@
+{
+  "task_id": "task-20250205-2345",
+  "task_description": "Add permissions snapshot integration testing to AWS CDK CLI - record IAM roles assumed and actions performed during integration tests, save as snapshots, and fail tests when permissions change",
+  "status": "in_progress",
+  "features": [
+    {
+      "id": "FEAT-001",
+      "type": "feat",
+      "description": "Create AWS SDK v3 middleware for permission tracking that intercepts API calls and captures IAM actions and assumed roles",
+      "status": "pending",
+      "steps": [
+        "Create new package `@aws-cdk/integ-permissions-tracker` under `tools/@aws-cdk/` with TypeScript configuration",
+        "Implement `PermissionMiddleware` class that hooks into AWS SDK v3 middleware stack",
+        "Create `PermissionRecorder` class to collect and store captured permissions (service, action, role ARN, timestamp)",
+        "Implement STS AssumeRole tracking by intercepting `sts:AssumeRole` calls specifically",
+        "Add helper function to extract IAM action from SDK call (e.g., `s3:GetObject` from S3 GetObject command)",
+        "Create unit tests for middleware interception and permission extraction logic",
+        "Export public API for enabling/disabling tracking and retrieving recorded permissions"
+      ],
+      "acceptance_criteria": [
+        "Middleware correctly intercepts all AWS SDK v3 API calls",
+        "IAM actions are correctly derived from service and action names (e.g., `lambda:InvokeFunction`)",
+        "STS AssumeRole calls are tracked with the target role ARN",
+        "Multiple SDK clients can share the same recorder instance",
+        "Unit tests achieve >90% code coverage for the middleware module"
+      ]
+    },
+    {
+      "id": "FEAT-002",
+      "type": "feat",
+      "description": "Implement permission snapshot file format, serialization, and comparison utilities",
+      "status": "pending",
+      "steps": [
+        "Define TypeScript interface `PermissionSnapshot` with schema for roles assumed and actions performed",
+        "Implement `PermissionSnapshotWriter` class for deterministic JSON serialization (sorted keys, normalized values)",
+        "Create `PermissionSnapshotReader` class to load and parse existing snapshot files",
+        "Implement `PermissionSnapshotComparator` for diffing actual vs expected permissions",
+        "Add utility functions for snapshot file naming convention (`integ.*.permissions.snapshot.json`)",
+        "Create clear diff output format showing added/removed roles and actions",
+        "Add unit tests for serialization, parsing, and comparison logic"
+      ],
+      "acceptance_criteria": [
+        "Snapshot format is human-readable JSON with clear structure",
+        "Serialization is deterministic - same permissions always produce identical output",
+        "Comparison correctly identifies added, removed, and unchanged permissions",
+        "Diff output is clear and actionable for developers",
+        "Snapshot files follow naming convention matching existing `.snapshot` directories"
+      ]
+    },
+    {
+      "id": "FEAT-003",
+      "type": "feat",
+      "description": "Integrate permission tracking into integration test runner and test execution workflow",
+      "status": "pending",
+      "steps": [
+        "Modify `integration-test-runner.ts` to initialize permission tracker before test execution",
+        "Add environment variable or CLI flag `CDK_INTEG_PERMISSIONS_SNAPSHOT` to enable feature",
+        "Hook permission middleware into SDK clients used during `cdk deploy` and `cdk destroy`",
+        "Write permissions snapshot file after each test case completes",
+        "Store snapshot in test's `.snapshot` directory alongside existing artifacts",
+        "Add logic to skip permission tracking when running in dry-run or snapshot-only mode",
+        "Create integration test for the permission tracking feature itself"
+      ],
+      "acceptance_criteria": [
+        "Permission tracking can be enabled/disabled via configuration",
+        "Snapshot files are created in correct location with correct naming",
+        "Tracking does not significantly impact test execution performance (<5% overhead)",
+        "Feature works correctly with existing integ-runner commands and flags",
+        "Permissions are captured for both deployment and cleanup phases"
+      ]
+    },
+    {
+      "id": "FEAT-004",
+      "type": "feat",
+      "description": "Implement snapshot comparison, test assertions, and update workflow",
+      "status": "pending",
+      "steps": [
+        "Add permission snapshot comparison to integ-runner test validation step",
+        "Implement clear error messages when permission snapshots differ from expected",
+        "Add `--update-permissions-snapshot` flag to update expected permissions on intentional changes",
+        "Create aggregation logic to combine permission snapshots across all tests",
+        "Implement GitHub Actions-friendly output format for CI/CD reporting",
+        "Add validation to prevent accidental permission changes without explicit acknowledgment",
+        "Create documentation for snapshot update workflow in error messages"
+      ],
+      "acceptance_criteria": [
+        "Tests fail with clear message when permissions change unexpectedly",
+        "Developers can update snapshots intentionally with explicit flag",
+        "CI/CD pipelines show clear diff when permission changes detected",
+        "Aggregated snapshot can serve as documentation of all required permissions",
+        "Workflow prevents accidental permission scope increases"
+      ]
+    },
+    {
+      "id": "FEAT-005",
+      "type": "docs",
+      "description": "Documentation updates for permission snapshot testing feature",
+      "status": "pending",
+      "steps": [
+        "Add README.md to `@aws-cdk/integ-permissions-tracker` package explaining usage",
+        "Update `INTEGRATION_TESTS.md` with section on permission snapshot testing",
+        "Document snapshot file format and schema for external tooling integration",
+        "Add troubleshooting guide for common permission snapshot failures",
+        "Include example workflow for handling intentional permission changes"
+      ],
+      "acceptance_criteria": [
+        "Documentation clearly explains when and why permission snapshots change",
+        "Developers understand how to update snapshots when making intentional changes",
+        "Schema documentation enables external tooling to parse snapshot files",
+        "README includes code examples for enabling permission tracking"
+      ]
+    }
+  ]
+}
