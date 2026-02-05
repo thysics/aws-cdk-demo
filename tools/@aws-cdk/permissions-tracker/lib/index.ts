@@ -11,3 +11,5 @@
 export * from './types';
 export * from './permissions-collector';
 export * from './permissions-middleware';
+export * from './permissions-snapshot';
+export * from './snapshot-comparator';
