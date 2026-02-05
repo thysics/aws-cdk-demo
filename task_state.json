@@ -7,7 +7,7 @@
       "id": "FEAT-001",
       "type": "feat",
       "description": "Create AWS SDK permissions interceptor module for tracking IAM actions and role assumptions",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Create new directory `packages/@aws-cdk/integ-tests-alpha/lib/permissions/` for permissions tracking module",
         "Implement `PermissionsTracker` class with AWS SDK v3 middleware support to intercept all SDK calls",
