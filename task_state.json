@@ -1,0 +1,82 @@
+{
+  "task_id": "task-20260205-2220",
+  "task_description": "CLI permissions snapshot integration testing - Implement a mechanism to record IAM roles assumed and actions performed during CLI integration tests, storing them as snapshots that fail tests when changed",
+  "status": "in_progress",
+  "features": [
+    {
+      "id": "FEAT-001",
+      "type": "feat",
+      "description": "Create AWS SDK v3 permissions recording middleware that intercepts and records all IAM roles assumed and actions performed during SDK calls",
+      "status": "pending",
+      "steps": [
+        "Create new package 'tools/@aws-cdk/permissions-recorder' with package.json, tsconfig.json, and standard CDK tooling setup",
+        "Implement PermissionsRecorder class with start(), stop(), getRecordedPermissions(), and reset() methods",
+        "Create AWS SDK v3 middleware plugin that hooks into the middleware stack at the 'initialize' step",
+        "Intercept all SDK requests to extract: service name (from clientName), action name (from Command name), and region",
+        "Special handling for STS service: capture AssumeRole/AssumeRoleWithSAML/AssumeRoleWithWebIdentity calls and extract RoleArn from input parameters",
+        "Implement PermissionsSnapshot interface with structure: { roles: string[], actions: { service: string, action: string, count: number }[] }",
+        "Add helper method to apply middleware to any AWS SDK v3 client instance",
+        "Write comprehensive unit tests for middleware interception, role capture, and action recording"
+      ],
+      "acceptance_criteria": [
+        "Middleware successfully intercepts all AWS SDK v3 service calls without affecting functionality",
+        "STS AssumeRole calls are captured with the target role ARN",
+        "All service:action combinations are recorded with call counts",
+        "Recorder can be started, stopped, and reset cleanly",
+        "Unit tests achieve >90% code coverage",
+        "Package builds successfully with cdk-build-tools"
+      ]
+    },
+    {
+      "id": "FEAT-002",
+      "type": "feat",
+      "description": "Integrate permissions recorder into integration test execution workflow and write permissions snapshot files",
+      "status": "pending",
+      "steps": [
+        "Modify 'tools/@aws-cdk/integration-test-deployment/lib/integration-test-runner.ts' to import and initialize PermissionsRecorder",
+        "Start recording before each integration test batch execution in deployIntegrationTest()",
+        "Create helper function to inject middleware into CDK CLI's AWS SDK clients (via environment variable or SDK configuration)",
+        "After test execution, retrieve recorded permissions and write to snapshot directory",
+        "Implement permissions snapshot file format: '<test-name>.permissions.snapshot.json' stored in the test's .snapshot/ directory",
+        "Ensure snapshot file is sorted deterministically (roles alphabetically, actions by service then action name)",
+        "Add configuration option to enable/disable permissions recording (default: enabled)",
+        "Handle errors gracefully - permissions recording failure should not fail the test",
+        "Update integration-test-deployment package.json to add dependency on permissions-recorder"
+      ],
+      "acceptance_criteria": [
+        "Permissions snapshot file is generated for each integration test run",
+        "Snapshot file contains all IAM roles assumed during test",
+        "Snapshot file contains all service:action combinations with counts",
+        "Snapshot file format is deterministic and diff-friendly (sorted, formatted JSON)",
+        "Recording can be disabled via configuration",
+        "Test execution completes successfully with recording enabled"
+      ]
+    },
+    {
+      "id": "FEAT-003",
+      "type": "feat",
+      "description": "Implement snapshot comparison logic and clear failure reporting when permissions change",
+      "status": "pending",
+      "steps": [
+        "Create PermissionsSnapshotComparator class in permissions-recorder package",
+        "Implement comparison logic: detect added roles, removed roles, added actions, removed actions, changed action counts",
+        "Generate structured diff output: { addedRoles: [], removedRoles: [], addedActions: [], removedActions: [], changedCounts: [] }",
+        "Integrate comparison into integ-runner workflow: after test, compare generated snapshot with existing snapshot",
+        "If no existing snapshot exists, write new snapshot and pass (first run behavior)",
+        "If snapshot differs, fail the test with detailed diff output showing exactly what changed",
+        "Add --update-permissions-snapshot flag to integ-runner to update snapshots when changes are intentional",
+        "Format diff output for GitHub Actions visibility (use ::error:: and ::warning:: syntax)",
+        "Add documentation to INTEGRATION_TESTS.md explaining the permissions snapshot feature",
+        "Write integration tests that verify the snapshot comparison and failure behavior"
+      ],
+      "acceptance_criteria": [
+        "Tests fail with clear error message when permissions snapshot changes unexpectedly",
+        "Diff output clearly shows added/removed roles and actions",
+        "New tests automatically create baseline permissions snapshot",
+        "Users can update snapshots intentionally with --update-permissions-snapshot flag",
+        "GitHub Actions output is properly formatted for visibility",
+        "Documentation explains the feature and how to handle snapshot updates"
+      ]
+    }
+  ]
+}
