@@ -1,7 +1,7 @@
 {
   "task_id": "task-20260205-2220",
   "task_description": "CLI permissions snapshot integration testing - Implement a mechanism to record IAM roles assumed and actions performed during CLI integration tests, storing them as snapshots that fail tests when changed",
-  "status": "in_progress",
+  "status": "completed",
   "features": [
     {
       "id": "FEAT-001",
@@ -56,7 +56,7 @@
       "id": "FEAT-003",
       "type": "feat",
       "description": "Implement snapshot comparison logic and clear failure reporting when permissions change",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Create PermissionsSnapshotComparator class in permissions-recorder package",
         "Implement comparison logic: detect added roles, removed roles, added actions, removed actions, changed action counts",

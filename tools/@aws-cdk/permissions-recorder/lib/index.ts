@@ -25,6 +25,29 @@ export {
   safeReadPermissionsSnapshot,
 } from './snapshot-writer';
 
+// Snapshot comparison
+export {
+  SnapshotDiff,
+  compareSnapshots,
+  hasDifferences,
+  formatDiff,
+  formatDiffForGitHub,
+  summarizeDiff,
+} from './snapshot-comparator';
+
+// Assertions
+export {
+  AssertionResult,
+  AssertPermissionsSnapshotOptions,
+  assertPermissionsSnapshot,
+  checkPermissionsSnapshot,
+  updatePermissionsSnapshot,
+  getPermissionsDiff,
+  assertOrUpdatePermissionsSnapshot,
+  isUpdateMode,
+  UPDATE_PERMISSIONS_ENV,
+} from './assertion';
+
 // SDK client instrumentation
 export {
   SdkClientWithMiddleware,

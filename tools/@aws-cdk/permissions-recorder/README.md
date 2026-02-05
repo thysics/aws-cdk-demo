@@ -9,6 +9,8 @@ This package provides middleware that intercepts AWS SDK v3 API calls to:
 - Capture IAM role ARNs from STS AssumeRole calls
 - Generate permission snapshots for testing
 - Write and read permission snapshots to/from files
+- Compare snapshots and report differences
+- Fail tests when permissions change unexpectedly
 
 ## Usage
 
@@ -90,6 +92,86 @@ const existingSnapshot = readPermissionsSnapshot('/path/to/snapshot/dir');
 const success = safeWritePermissionsSnapshot('/path/to/snapshot/dir', snapshot);
 ```
 
+### Snapshot Comparison
+
+```typescript
+import {
+  compareSnapshots,
+  hasDifferences,
+  formatDiff,
+  formatDiffForGitHub,
+} from '@aws-cdk/permissions-recorder';
+
+// Compare two snapshots
+const diff = compareSnapshots(expectedSnapshot, actualSnapshot);
+
+// Check if there are differences
+if (hasDifferences(diff)) {
+  // Get human-readable diff
+  console.log(formatDiff(diff, 'integ.lambda.ts'));
+  
+  // Get GitHub Actions formatted output
+  console.log(formatDiffForGitHub(diff, 'test/integ.lambda.ts'));
+}
+```
+
+Example diff output:
+```
+Permissions snapshot mismatch for test: integ.lambda.ts
+
+ADDED ROLES:
+  + arn:aws:iam::123456789012:role/NewRole
+
+REMOVED ROLES:
+  - arn:aws:iam::123456789012:role/OldRole
+
+ADDED ACTIONS:
+  + s3:DeleteBucket
+
+REMOVED ACTIONS:
+  - s3:PutObject
+
+CHANGED ACTION COUNTS:
+  ~ cloudformation:DescribeStacks: 5 -> 8
+
+To update the snapshot, run with CDK_INTEG_UPDATE_PERMISSIONS=true
+```
+
+GitHub Actions output:
+```
+::warning file=test/integ.lambda.ts::Permissions changed: Added actions: s3:DeleteBucket
+```
+
+### Assertion Functions
+
+```typescript
+import {
+  assertPermissionsSnapshot,
+  updatePermissionsSnapshot,
+  assertOrUpdatePermissionsSnapshot,
+  checkPermissionsSnapshot,
+} from '@aws-cdk/permissions-recorder';
+
+// Assert permissions match snapshot (throws if different)
+assertPermissionsSnapshot('/path/to/snapshot/dir', {
+  testName: 'integ.lambda.ts',
+  testFile: 'test/integ.lambda.ts',
+});
+
+// Update snapshot with current permissions
+updatePermissionsSnapshot('/path/to/snapshot/dir');
+
+// Assert or update based on environment variable
+// (updates if CDK_INTEG_UPDATE_PERMISSIONS=true)
+assertOrUpdatePermissionsSnapshot('/path/to/snapshot/dir');
+
+// Check without throwing
+const result = checkPermissionsSnapshot('/path/to/snapshot/dir');
+if (!result.passed) {
+  console.error(result.message);
+}
+```
+
 ## Snapshot Format
 
 ```json
@@ -108,6 +190,19 @@ const success = safeWritePermissionsSnapshot('/path/to/snapshot/dir', snapshot);
 
 - `CDK_INTEG_PERMISSIONS_SNAPSHOT`: Set to "true" to enable permissions recording in integration tests
 - `CDK_INTEG_SNAPSHOT_DIR`: Directory to write the permissions snapshot
+- `CDK_INTEG_UPDATE_PERMISSIONS`: Set to "true" to update snapshots instead of asserting
+
+## Updating Permissions Snapshots
+
+When permissions change intentionally (e.g., a new AWS service is used), you can update the snapshots:
+
+```bash
+# Update all permissions snapshots
+CDK_INTEG_UPDATE_PERMISSIONS=true yarn integ-runner ...
+
+# Or use the --update-permissions-snapshot flag (if supported by your runner)
+yarn integ-runner --update-permissions-snapshot ...
+```
 
 ## API Reference
 
@@ -134,6 +229,23 @@ const success = safeWritePermissionsSnapshot('/path/to/snapshot/dir', snapshot);
 - `recordedActions`: Map of service:action to call count
 - `isRecording`: Whether recording is currently active
 
+### Snapshot Comparison Functions
+
+- `compareSnapshots(expected, actual)`: Compare two snapshots, returns `SnapshotDiff`
+- `hasDifferences(diff)`: Check if the diff has any differences
+- `formatDiff(diff, testName?)`: Format diff as human-readable string
+- `formatDiffForGitHub(diff, testFile?)`: Format diff with GitHub Actions syntax
+- `summarizeDiff(diff)`: Get a brief summary of the differences
+
+### Assertion Functions
+
+- `assertPermissionsSnapshot(dir, options?)`: Assert snapshot matches, throw if different
+- `checkPermissionsSnapshot(dir, options?)`: Check snapshot without throwing
+- `updatePermissionsSnapshot(dir, options?)`: Update snapshot with current permissions
+- `assertOrUpdatePermissionsSnapshot(dir, options?)`: Assert or update based on env var
+- `getPermissionsDiff(dir, options?)`: Get the diff between expected and actual
+- `isUpdateMode()`: Check if update mode is enabled via environment
+
 ### SDK Integration Functions
 
 - `instrumentSdkClient(client, recorder?)`: Add middleware to a single client
@@ -155,9 +267,12 @@ const success = safeWritePermissionsSnapshot('/path/to/snapshot/dir', snapshot);
 ### Types
 
 - `PermissionsSnapshot`: Interface for the snapshot data structure
+- `SnapshotDiff`: Interface for snapshot comparison results
+- `AssertionResult`: Interface for assertion function results
 - `PermissionsRecordingConfig`: Configuration options
 - `ENV_VARS`: Object containing environment variable names
 - `DEFAULT_SNAPSHOT_FILENAME`: Default filename for snapshots
+- `UPDATE_PERMISSIONS_ENV`: Environment variable for update mode
 
 ## License
 

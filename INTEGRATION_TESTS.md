@@ -338,3 +338,97 @@ yarn integ-runner --directory packages/@aws-cdk --update-on-failed \
 
 When using both `--parallel-regions` and `--profiles` it will execute (regions*profiles) tests in parallel (in this example 12)
 If you want to execute more than 16 tests in parallel you can pass a higher value to `--max-workers`.
+
+## Permissions Snapshots
+
+In addition to CloudFormation template snapshots, integration tests also track IAM permissions used during test execution. This helps detect unintended changes to the AWS API calls made during deployments.
+
+### What are Permissions Snapshots?
+
+Permissions snapshots record:
+- All IAM roles assumed during test execution
+- All AWS service actions (API calls) performed, with counts
+- This data is stored in `permissions.snapshot.json` files alongside the CloudFormation snapshots
+
+### Why Track Permissions?
+
+1. **Security Auditing**: Track what AWS permissions are actually being used during deployments
+2. **Regression Detection**: Detect when code changes result in new or different AWS API calls
+3. **Principle of Least Privilege**: Ensure tests don't use more permissions than necessary
+4. **Documentation**: Provide visibility into what AWS resources are accessed during test execution
+
+### Snapshot Format
+
+Permissions snapshots have the following format:
+
+```json
+{
+  "version": "1.0",
+  "roles": [
+    "arn:aws:iam::123456789012:role/DeploymentRole"
+  ],
+  "actions": {
+    "cloudformation:CreateChangeSet": 1,
+    "cloudformation:DescribeStacks": 5,
+    "s3:PutObject": 2,
+    "sts:AssumeRole": 1
+  }
+}
+```
+
+### When Permissions Change
+
+When running integration tests, if the recorded permissions don't match the expected snapshot, the test will fail with a detailed diff:
+
+```
+Permissions snapshot mismatch for test: integ.lambda.ts
+
+ADDED ROLES:
+  + arn:aws:iam::123456789012:role/NewRole
+
+REMOVED ROLES:
+  - arn:aws:iam::123456789012:role/OldRole
+
+ADDED ACTIONS:
+  + s3:DeleteBucket
+
+REMOVED ACTIONS:
+  - s3:PutObject
+
+CHANGED ACTION COUNTS:
+  ~ cloudformation:DescribeStacks: 5 -> 8
+
+To update the snapshot, run with CDK_INTEG_UPDATE_PERMISSIONS=true
+```
+
+### Updating Permissions Snapshots
+
+If the permissions changes are intentional (e.g., you added a new AWS service integration), you can update the snapshots:
+
+```bash
+# Update all permissions snapshots
+CDK_INTEG_UPDATE_PERMISSIONS=true yarn integ-runner --directory packages/@aws-cdk --update-on-failed
+
+# Or set the environment variable separately
+export CDK_INTEG_UPDATE_PERMISSIONS=true
+yarn integ-runner ...
+```
+
+### GitHub Actions Integration
+
+In CI/CD environments (like GitHub Actions), permissions mismatches are formatted for visibility:
+
+```
+::warning file=test/integ.lambda.ts::Permissions changed: Added actions: s3:DeleteBucket
+::warning file=test/integ.lambda.ts::Permissions changed: Removed actions: s3:PutObject
+```
+
+This makes it easy to spot permission changes in pull request checks.
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `CDK_INTEG_PERMISSIONS_SNAPSHOT` | Set to "true" to enable permissions recording |
+| `CDK_INTEG_SNAPSHOT_DIR` | Directory for the permissions snapshot |
+| `CDK_INTEG_UPDATE_PERMISSIONS` | Set to "true" to update snapshots instead of asserting |

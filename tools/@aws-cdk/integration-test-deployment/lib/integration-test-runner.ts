@@ -5,7 +5,13 @@ import {
   PermissionsRecorder,
   instrumentSdkClient,
   safeWritePermissionsSnapshot,
+  readPermissionsSnapshot,
+  compareSnapshots,
+  hasDifferences,
+  formatDiff,
+  formatDiffForGitHub,
   ENV_VARS,
+  UPDATE_PERMISSIONS_ENV,
 } from '@aws-cdk/permissions-recorder';
 import { AtmosphereAllocation } from './atmosphere';
 import { getChangedSnapshots } from './utils';
@@ -24,6 +30,13 @@ export interface PermissionsRecordingOptions {
    * Base directory for snapshots (snapshot dir will be derived from test paths)
    */
   readonly snapshotBaseDir?: string;
+
+  /**
+   * Whether to update permissions snapshots instead of asserting
+   * Can also be set via CDK_INTEG_UPDATE_PERMISSIONS environment variable
+   * @default false
+   */
+  readonly updatePermissionsSnapshot?: boolean;
 }
 
 /**
@@ -39,6 +52,18 @@ function getSnapshotDirForTest(testPath: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Check if permissions snapshot update mode is enabled
+ */
+function isUpdatePermissionsMode(options: PermissionsRecordingOptions): boolean {
+  // Check options first, then environment variable
+  if (options.updatePermissionsSnapshot !== undefined) {
+    return options.updatePermissionsSnapshot;
+  }
+  const envValue = process.env[UPDATE_PERMISSIONS_ENV];
+  return envValue === 'true' || envValue === '1';
+}
+
 export const deployIntegTests = async (props: {
   atmosphereRoleArn: string;
   endpoint: string;
@@ -48,6 +73,7 @@ export const deployIntegTests = async (props: {
 }) => {
   const batchSize = props.batchSize ?? 3;
   const permissionsRecordingEnabled = props.permissionsRecording?.enabled ?? true;
+  const updateMode = isUpdatePermissionsMode(props.permissionsRecording ?? {});
 
   // Initialize permissions recorder if enabled
   const recorder = permissionsRecordingEnabled ? PermissionsRecorder.globalInstance : undefined;
@@ -59,6 +85,7 @@ export const deployIntegTests = async (props: {
   }
 
   let hasFailure = false;
+  let permissionsFailure = false;
 
   for (let i = 0; i < changedSnapshots.length; i += batchSize) {
     const batch = changedSnapshots.slice(i, i + batchSize);
@@ -108,23 +135,49 @@ export const deployIntegTests = async (props: {
       console.error(e);
       hasFailure = true;
     } finally {
-      // Stop recording and write snapshot
+      // Stop recording and handle snapshot
       if (recorder) {
         recorder.stop();
 
         try {
           const snapshot = recorder.getSnapshot();
 
-          // Write snapshot to each test's snapshot directory
+          // Process each test's snapshot
           for (const testPath of batch) {
             const snapshotDir = getSnapshotDirForTest(testPath);
             if (snapshotDir) {
-              safeWritePermissionsSnapshot(snapshotDir, snapshot);
+              // Read existing snapshot if present
+              const existingSnapshot = readPermissionsSnapshot(snapshotDir);
+
+              if (updateMode) {
+                // Update mode: always write the new snapshot
+                safeWritePermissionsSnapshot(snapshotDir, snapshot);
+                console.log(`Updated permissions snapshot for: ${testPath}`);
+              } else if (existingSnapshot === null) {
+                // First run: create new snapshot
+                safeWritePermissionsSnapshot(snapshotDir, snapshot);
+                console.log(`Created new permissions snapshot for: ${testPath}`);
+              } else {
+                // Compare snapshots
+                const diff = compareSnapshots(existingSnapshot, snapshot);
+
+                if (hasDifferences(diff)) {
+                  // Log human-readable diff
+                  console.error(formatDiff(diff, testPath));
+
+                  // Log GitHub Actions formatted output
+                  console.error(formatDiffForGitHub(diff, testPath));
+
+                  permissionsFailure = true;
+                } else {
+                  console.log(`Permissions snapshot matches for: ${testPath}`);
+                }
+              }
             }
           }
         } catch (snapshotError) {
           // Log but don't fail the test due to snapshot errors
-          console.warn(`::warning::Failed to capture permissions snapshot: ${snapshotError}`);
+          console.warn(`::warning::Failed to process permissions snapshot: ${snapshotError}`);
         }
       }
 
@@ -143,6 +196,10 @@ export const deployIntegTests = async (props: {
         }
       }
     }
+  }
+
+  if (permissionsFailure) {
+    throw Error('Permissions snapshot mismatch detected. Run with CDK_INTEG_UPDATE_PERMISSIONS=true to update snapshots.');
   }
 
   if (hasFailure) {
@@ -208,3 +265,4 @@ export const deployIntegrationTest = async (env: NodeJS.ProcessEnv, snapshotPath
     else reject(new Error(`Integration tests failed with exit code ${code}`));
   }));
 };
+
