@@ -70,7 +70,7 @@ describe('Run Integration Tests with Atmosphere', () => {
     jest.spyOn(mockAtmosphereAllocation, 'release');
     jest.spyOn(integRunner, 'deployIntegrationTest').mockImplementation(async () => {});
     jest.spyOn(integRunner, 'bootstrap').mockImplementation(async () => {});
-    jest.spyOn(integRunner, 'assumeAtmosphereRole').mockImplementation(async (_roleArn: string) => ({
+    jest.spyOn(integRunner, 'assumeAtmosphereRole').mockImplementation(async (_roleArn: string, _context?: any) => ({
       AccessKeyId: env.AWS_ACCESS_KEY_ID,
       SecretAccessKey: env.AWS_SECRET_ACCESS_KEY,
       SessionToken: env.AWS_SESSION_TOKEN,

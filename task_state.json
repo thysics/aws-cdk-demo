@@ -29,7 +29,7 @@
       "id": "FEAT-002",
       "type": "feat",
       "description": "Implement permission snapshot file format, serialization, and comparison utilities",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Define TypeScript interface `PermissionSnapshot` with schema for roles assumed and actions performed",
         "Implement `PermissionSnapshotWriter` class for deterministic JSON serialization (sorted keys, normalized values)",
@@ -51,7 +51,7 @@
       "id": "FEAT-003",
       "type": "feat",
       "description": "Integrate permission tracking into integration test runner and test execution workflow",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Modify `integration-test-runner.ts` to initialize permission tracker before test execution",
         "Add environment variable or CLI flag `CDK_INTEG_PERMISSIONS_SNAPSHOT` to enable feature",
