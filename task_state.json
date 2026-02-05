@@ -1,0 +1,100 @@
+{
+  "task_id": "task-20250206-0100",
+  "task_description": "Implement IAM permissions snapshot testing for CDK CLI integration tests - capturing IAM roles assumed and actions performed during test execution, with snapshot comparison to detect permission changes",
+  "status": "in_progress",
+  "features": [
+    {
+      "id": "FEAT-001",
+      "type": "feat",
+      "description": "Create AWS SDK permissions interceptor module for tracking IAM actions and role assumptions",
+      "status": "pending",
+      "steps": [
+        "Create new directory `packages/@aws-cdk/integ-tests-alpha/lib/permissions/` for permissions tracking module",
+        "Implement `PermissionsTracker` class with AWS SDK v3 middleware support to intercept all SDK calls",
+        "Add tracking for STS AssumeRole, AssumeRoleWithWebIdentity, AssumeRoleWithSAML operations to capture role assumptions",
+        "Implement IAM action extraction from SDK calls (convert service/operation to service:action format)",
+        "Create `PermissionsSnapshot` interface to define the snapshot data structure with rolesAssumed and actionsPerformed arrays",
+        "Add support for organizing permissions by test case name",
+        "Write unit tests for PermissionsTracker class with mocked AWS SDK calls"
+      ],
+      "acceptance_criteria": [
+        "PermissionsTracker can be attached to AWS SDK clients as middleware",
+        "All STS role assumption calls are captured with role ARN",
+        "All AWS service calls are captured in service:action format (e.g., s3:PutObject)",
+        "Permissions are organized by test case identifier",
+        "Unit tests cover middleware interception, role tracking, and action extraction"
+      ]
+    },
+    {
+      "id": "FEAT-002",
+      "type": "feat",
+      "description": "Implement permissions snapshot writer and reader with comparison logic",
+      "status": "pending",
+      "steps": [
+        "Create `PermissionsSnapshotWriter` class in `packages/@aws-cdk/integ-tests-alpha/lib/permissions/snapshot-writer.ts`",
+        "Implement write functionality to save `permissions.snapshot.json` to snapshot directories",
+        "Create `PermissionsSnapshotReader` class to read existing snapshot files",
+        "Implement `PermissionsSnapshotComparator` class with diff logic to compare two snapshots",
+        "Add support for detecting added/removed roles and added/removed actions",
+        "Generate human-readable diff output for failed comparisons",
+        "Follow existing pattern from `IntegManifestWriter` for file handling",
+        "Write unit tests for snapshot read/write and comparison logic"
+      ],
+      "acceptance_criteria": [
+        "Snapshots are written in sorted, deterministic JSON format for stable diffs",
+        "Reader correctly parses existing permission snapshot files",
+        "Comparator detects differences in roles assumed",
+        "Comparator detects differences in IAM actions performed",
+        "Comparison output clearly shows what changed (added/removed items)",
+        "Unit tests cover write, read, and comparison scenarios"
+      ]
+    },
+    {
+      "id": "FEAT-003",
+      "type": "feat",
+      "description": "Integrate permissions tracking with IntegTest framework and manifest synthesizer",
+      "status": "pending",
+      "steps": [
+        "Add `enablePermissionsSnapshot` option to `IntegTestProps` in `test-case.ts`",
+        "Modify `IntegManifestSynthesizer` to include permissions tracking configuration in manifest",
+        "Update `IntegTestCase` to support permissions snapshot metadata",
+        "Add permissions snapshot file path to cloud assembly schema if needed",
+        "Export new permissions tracking classes from `packages/@aws-cdk/integ-tests-alpha/lib/index.ts`",
+        "Update README.md with documentation for the new permissions snapshot feature",
+        "Write integration tests demonstrating the permissions snapshot functionality"
+      ],
+      "acceptance_criteria": [
+        "IntegTest accepts `enablePermissionsSnapshot` configuration option",
+        "Manifest includes permissions tracking settings when enabled",
+        "Permissions snapshot configuration is properly synthesized",
+        "New classes are exported from the package's public API",
+        "Documentation explains how to use permissions snapshots"
+      ]
+    },
+    {
+      "id": "FEAT-004",
+      "type": "feat",
+      "description": "Integrate permissions snapshot validation with integration test runner",
+      "status": "pending",
+      "steps": [
+        "Modify `tools/@aws-cdk/integration-test-deployment/lib/integration-test-runner.ts` to support permissions tracking",
+        "Wrap AWS SDK client creation with PermissionsTracker middleware during test execution",
+        "Capture permissions during `cdk deploy` and `cdk destroy` operations",
+        "After test execution, write permissions snapshot to test's snapshot directory",
+        "Implement comparison between new and existing permissions snapshots",
+        "Fail test execution if permissions snapshot differs from stored snapshot (when not in update mode)",
+        "Add `--update-permissions-snapshot` flag support for updating snapshots",
+        "Add logging to show permissions diff when test fails due to permission changes",
+        "Write unit tests for runner integration"
+      ],
+      "acceptance_criteria": [
+        "Test runner captures all AWS SDK calls made during cdk deploy/destroy",
+        "Permissions snapshot is written to `*.snapshot/permissions.snapshot.json`",
+        "Test fails with clear error message when permissions change unexpectedly",
+        "Users can update permissions snapshots with update flag",
+        "Permission diffs are logged in human-readable format",
+        "Unit tests verify runner behavior with mocked executions"
+      ]
+    }
+  ]
+}
