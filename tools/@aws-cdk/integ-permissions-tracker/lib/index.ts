@@ -11,6 +11,11 @@
  * import {
  *   PermissionTracker,
  *   createPermissionTrackerPlugin,
+ *   writePermissionSnapshot,
+ *   readPermissionSnapshot,
+ *   compareSnapshots,
+ *   formatSnapshotDiff,
+ *   getPermissionSnapshotPath,
  * } from '@aws-cdk/integ-permissions-tracker';
  *
  * import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -25,7 +30,17 @@
  * // get permission snapshot
  * const tracker = PermissionTracker.getInstance();
  * const snapshot = tracker.getSnapshot();
- * console.log(JSON.stringify(snapshot, null, 2));
+ *
+ * // compare with baseline
+ * const snapshotPath = getPermissionSnapshotPath('integ.my-test', '/path/to/snapshots');
+ * const baseline = readPermissionSnapshot(snapshotPath);
+ * const diff = compareSnapshots(baseline, snapshot);
+ *
+ * if (diff.hasChanges) {
+ *   console.log(formatSnapshotDiff(diff));
+ *   // optionally update the snapshot
+ *   writePermissionSnapshot(snapshotPath, snapshot);
+ * }
  *
  * // clear for next test
  * tracker.clear();
@@ -53,3 +68,20 @@ export {
   formatIamAction,
   PermissionTrackerPlugin,
 } from './middleware';
+
+// snapshot file operations
+export {
+  getPermissionSnapshotPath,
+  writePermissionSnapshot,
+  readPermissionSnapshot,
+  snapshotExists,
+  PERMISSION_SNAPSHOT_EXTENSION,
+} from './snapshot-file';
+
+// snapshot comparison
+export {
+  SnapshotDiff,
+  compareSnapshots,
+  formatSnapshotDiff,
+  snapshotsAreEqual,
+} from './snapshot-comparison';
