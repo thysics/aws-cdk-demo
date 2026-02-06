@@ -1,7 +1,7 @@
 {
   "task_id": "task-20250205-2345",
   "task_description": "Add permissions snapshot integration testing to AWS CDK CLI - record IAM roles assumed and actions performed during integration tests, save as snapshots, and fail tests when permissions change",
-  "status": "in_progress",
+  "status": "completed",
   "features": [
     {
       "id": "FEAT-001",
@@ -73,7 +73,7 @@
       "id": "FEAT-004",
       "type": "feat",
       "description": "Implement snapshot comparison, test assertions, and update workflow",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Add permission snapshot comparison to integ-runner test validation step",
         "Implement clear error messages when permission snapshots differ from expected",
@@ -95,7 +95,7 @@
       "id": "FEAT-005",
       "type": "docs",
       "description": "Documentation updates for permission snapshot testing feature",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Add README.md to `@aws-cdk/integ-permissions-tracker` package explaining usage",
         "Update `INTEGRATION_TESTS.md` with section on permission snapshot testing",

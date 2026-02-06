@@ -527,6 +527,14 @@ or manually update the snapshot.
 See the [integration test guide](./INTEGRATION_TESTS.md) for a more complete guide on running
 CDK integration tests.
 
+**Permission Snapshot Testing**
+
+Integration tests can also track IAM permissions used during test execution. Permission snapshots
+help detect unintended permission changes and provide documentation of required permissions.
+To enable permission tracking, use `--permissions-snapshot` flag or set `CDK_INTEG_PERMISSIONS_SNAPSHOT=true`.
+See the [Permission Snapshot Testing section](./INTEGRATION_TESTS.md#permission-snapshot-testing)
+in the integration tests guide for more details.
+
 #### yarn watch (Optional)
 
 We've added a watch feature to the CDK that builds your code as you type it. Start this by running `yarn watch` for

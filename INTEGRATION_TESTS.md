@@ -11,6 +11,7 @@ on what type of changes require integrations tests and how you should write inte
     - [New L2 Constructs](#new-l2-constructs)
     - [Existing L2 Constructs](#existing-l2-constructs)
     - [Assertions](#assertions)
+  - [Permission Snapshot Testing](#permission-snapshot-testing)
   - [Running Integration Tests](#running-integration-tests)
     - [Running large numbers of Tests](#running-large-numbers-of-tests)
 
@@ -301,6 +302,121 @@ Some things you should look for in deciding if the test needs an assertion:
   - This one is a bit of a judgement call. Most things do not need assertions, but sometimes we handle complicated configurations involving IAM permissions or
     Networking access.
 
+
+## Permission Snapshot Testing
+
+Permission snapshot testing is a feature that tracks and records the IAM permissions used during integration test execution. This helps detect unexpected permission changes and provides documentation of required permissions.
+
+### What are Permission Snapshots?
+
+Permission snapshots capture:
+- **IAM Roles**: All roles assumed during test execution (e.g., deployment roles, execution roles)
+- **API Actions**: All AWS API calls made during the test, organized by service
+
+The snapshot is stored as a JSON file alongside the CloudFormation template snapshot:
+
+```
+integ.lambda.js.snapshot/
+├── manifest.json
+├── LambdaStack.template.json
+└── integ.lambda.permissions.snapshot.json
+```
+
+### When Permission Snapshots are Useful
+
+Permission snapshots help with:
+
+1. **Security auditing**: Track what permissions CDK integration tests require
+2. **Change detection**: Catch unintended permission scope changes in pull requests
+3. **Documentation**: Generate comprehensive permission documentation for the CDK
+4. **Compliance**: Maintain records of permission requirements over time
+
+### How to Enable Permission Tracking
+
+Permission tracking can be enabled in several ways:
+
+**Using environment variable:**
+```bash
+CDK_INTEG_PERMISSIONS_SNAPSHOT=true yarn integ test/aws-lambda/test/integ.lambda.js
+```
+
+**Using CLI flag:**
+```bash
+yarn integ test/aws-lambda/test/integ.lambda.js --permissions-snapshot
+```
+
+### How to Update Snapshots
+
+When you intentionally change the permissions used by a test (e.g., adding new functionality that requires additional permissions), update the snapshot:
+
+```bash
+yarn integ test/aws-lambda/test/integ.lambda.js --update-permissions-snapshot
+```
+
+You can also combine this with the regular snapshot update:
+
+```bash
+yarn integ test/aws-lambda/test/integ.lambda.js --update-on-failed --update-permissions-snapshot
+```
+
+### Interpreting Diff Output
+
+When a permission snapshot differs from the baseline, you'll see output like:
+
+```
+✗ integ.lambda: Permission snapshot has changed
+
+Roles:
+  + arn:aws:iam::123456789012:role/NewRole
+
+New services:
+  + dynamodb
+      + GetItem
+      + PutItem
+
+Changed services:
+  ~ lambda
+    - DeleteFunction
+    + InvokeFunction
+
+To update the snapshot, run with --update-permissions-snapshot
+```
+
+**Legend:**
+- `+` indicates additions (new roles, services, or actions)
+- `-` indicates removals
+- `~` indicates modifications to existing services
+
+### Best Practices
+
+1. **Review changes carefully**: Permission changes can have security implications. Always review the diff before updating snapshots.
+
+2. **Include context in commits**: When updating snapshots due to feature changes, explain why in your commit message.
+
+3. **Don't update blindly**: The `--update-permissions-snapshot` flag should only be used when you have intentionally changed the permissions.
+
+4. **Check CI output**: In pull requests, CI will report permission changes that need to be addressed.
+
+### Snapshot File Format
+
+The permission snapshot follows this JSON schema:
+
+```json
+{
+  "version": "1.0",
+  "roles": [
+    "arn:aws:iam::123456789012:role/cdk-deploy-role"
+  ],
+  "actions": {
+    "cloudformation": ["CreateStack", "DeleteStack", "DescribeStacks"],
+    "s3": ["GetObject", "PutObject"],
+    "sts": ["AssumeRole"]
+  }
+}
+```
+
+For more details on the permission tracking implementation, see the
+[@aws-cdk/integ-permissions-tracker README](./tools/@aws-cdk/integ-permissions-tracker/README.md).
 
 ## Running Integration Tests
 
