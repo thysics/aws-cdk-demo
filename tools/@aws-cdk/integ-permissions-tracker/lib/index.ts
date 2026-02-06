@@ -16,6 +16,9 @@
  *   compareSnapshots,
  *   formatSnapshotDiff,
  *   getPermissionSnapshotPath,
+ *   printPermissionDiff,
+ *   generateReport,
+ *   aggregateSnapshots,
  * } from '@aws-cdk/integ-permissions-tracker';
  *
  * import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -37,10 +40,17 @@
  * const diff = compareSnapshots(baseline, snapshot);
  *
  * if (diff.hasChanges) {
- *   console.log(formatSnapshotDiff(diff));
+ *   // print colored diff to console
+ *   printPermissionDiff('integ.my-test', diff);
+ *
  *   // optionally update the snapshot
  *   writePermissionSnapshot(snapshotPath, snapshot);
  * }
+ *
+ * // generate report
+ * const results = [{ testName: 'integ.my-test', snapshotPath, passed: false, diff }];
+ * const report = generateReport(results, { format: 'markdown' });
+ * console.log(report);
  *
  * // clear for next test
  * tracker.clear();
@@ -85,3 +95,36 @@ export {
   formatSnapshotDiff,
   snapshotsAreEqual,
 } from './snapshot-comparison';
+
+// cli helpers
+export {
+  PrintDiffOptions,
+  PermissionTestResult,
+  printPermissionDiff,
+  printPermissionSummary,
+  promptUpdateSnapshot,
+  formatChangelogEntry,
+  getPlainTextDiff,
+} from './cli-helpers';
+
+// reporter
+export {
+  ReportOptions,
+  TestPermissionResult,
+  generateReport,
+  writeReport,
+  generateGitHubActionsOutput,
+} from './reporter';
+
+// aggregate snapshot
+export {
+  AggregateSnapshot,
+  SnapshotInput,
+  aggregateSnapshots,
+  writeAggregateSnapshot,
+  readAggregateSnapshot,
+  formatAggregateAsMarkdown,
+  getAggregateStats,
+  AGGREGATE_SNAPSHOT_FILENAME,
+  getDefaultAggregateSnapshotPath,
+} from './aggregate-snapshot';
