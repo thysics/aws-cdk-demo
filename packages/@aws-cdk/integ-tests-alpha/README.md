@@ -73,7 +73,7 @@ interface StackUnderTestProps extends StackProps {
 class StackUnderTest extends Stack {
   constructor(scope: Construct, id: string, props: StackUnderTestProps) {
     super(scope, id, props);
-	
+        
     new lambda.Function(this, 'Handler', {
       runtime: lambda.Runtime.NODEJS_LATEST,
       handler: 'index.handler',
@@ -97,7 +97,7 @@ interface StackUnderTestProps extends StackProps {
 class StackUnderTest extends Stack {
   constructor(scope: Construct, id: string, props: StackUnderTestProps) {
     super(scope, id, props);
-	
+        
     new lambda.Function(this, 'Handler', {
       runtime: lambda.Runtime.NODEJS_LATEST,
       handler: 'index.handler',
@@ -422,10 +422,10 @@ message.expect(ExpectedResult.objectLike({
       Payload: Match.serializedJson({ key: 'value' }),
     },
     {
-	  Body: {
-	    Values: Match.arrayWith([{ Asdf: 3 }]),
-		Message: Match.stringLikeRegexp('message'),
-	  },
+          Body: {
+            Values: Match.arrayWith([{ Asdf: 3 }]),
+                Message: Match.stringLikeRegexp('message'),
+          },
     },
   ]),
 }));
@@ -573,5 +573,124 @@ const describe = testCase.assertions.awsApiCall('StepFunctions', 'describeExecut
   interval: Duration.seconds(15),
   backoffRate: 3,
 });
+```
+
+## Permissions Snapshots
+
+This library provides utilities to record and compare IAM permissions used during integration tests.
+This is useful for detecting unexpected changes in IAM permission requirements that could break
+customer deployments with strict IAM policies.
+
+### Recording Permissions
+
+Use the `PermissionsSnapshotRecorder` to capture all IAM actions performed during a test:
+
+```ts
+import { PermissionsSnapshotRecorder } from '@aws-cdk/integ-tests-alpha';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+
+const recorder = new PermissionsSnapshotRecorder({
+  testName: 'my-integration-test',
+  snapshotDirectory: '.permissions-snapshots',
+});
+
+// Apply the interceptor plugin to your SDK clients
+const s3Client = new S3Client({});
+s3Client.middlewareStack.use(recorder.getInterceptorPlugin());
+
+// Start recording
+recorder.start();
+
+// Run your test operations
+await s3Client.send(new PutObjectCommand({
+  Bucket: 'my-bucket',
+  Key: 'my-key',
+  Body: 'hello',
+}));
+
+// Stop recording and get the snapshot
+const snapshot = recorder.stop();
+
+// Save the snapshot for future comparisons
+await recorder.save();
+```
+
+### Comparing with Baseline
+
+After saving a baseline snapshot, subsequent test runs can compare against it:
+
+```ts
+import { PermissionsSnapshotRecorder } from '@aws-cdk/integ-tests-alpha';
+
+const recorder = new PermissionsSnapshotRecorder({
+  testName: 'my-integration-test',
+});
+
+recorder.start();
+// ... run test ...
+recorder.stop();
+
+const result = await recorder.compareWithBaseline();
+if (!result.match) {
+  console.log('Permissions changed:');
+  console.log(result.summary);
+  // Handle the change - either update the baseline or fail the test
+}
+```
+
+### Snapshot Format
+
+Snapshots are stored as JSON files with the following structure:
+
+```json
+{
+  "version": "1.0.0",
+  "testName": "my-integration-test",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "actions": [
+    { "service": "CloudFormation", "action": "CreateStack" },
+    { "service": "S3", "action": "PutObject" }
+  ],
+  "assumedRoles": [
+    { "roleArn": "arn:aws:iam::123456789012:role/cdk-deploy-role" }
+  ]
+}
+```
+
+### Filtering Actions
+
+You can exclude certain services or actions from being recorded:
+
+```ts
+const recorder = new PermissionsSnapshotRecorder({
+  testName: 'my-test',
+  excludeServices: ['STS'], // Exclude all STS calls
+  excludeActions: ['sts:GetCallerIdentity'], // Exclude specific actions
+});
+```
+
+### Using with SDK Interceptor Manager
+
+For more control over capturing permissions, use the `SdkInterceptorManager` directly:
+
+```ts
+import { SdkInterceptorManager } from '@aws-cdk/integ-tests-alpha';
+import { S3Client } from '@aws-sdk/client-s3';
+import { CloudFormationClient } from '@aws-sdk/client-cloudformation';
+
+const manager = new SdkInterceptorManager({
+  excludeServices: ['STS'],
+});
+
+// Apply to multiple clients
+const s3Client = new S3Client({});
+s3Client.middlewareStack.use(manager.getPlugin());
+
+const cfnClient = new CloudFormationClient({});
+cfnClient.middlewareStack.use(manager.getPlugin());
+
+// After running operations
+console.log('Unique actions:', manager.getUniqueActions());
+console.log('Assumed roles:', manager.getUniqueAssumedRoles());
 ```
 
