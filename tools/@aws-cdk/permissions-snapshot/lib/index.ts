@@ -50,3 +50,44 @@ export {
 
 // Export the tracker class
 export { PermissionsTracker } from './permissions-tracker';
+
+// Export snapshot format utilities
+export {
+  SNAPSHOT_FORMAT_VERSION,
+  SNAPSHOT_FILE_EXTENSION,
+  SnapshotMetadata,
+  SnapshotFile,
+  createSnapshotFile,
+  extractSnapshot,
+  normalizeActions,
+  normalizeRoles,
+  validateSnapshotFile,
+} from './snapshot-format';
+
+// Export snapshot writer
+export {
+  WriteSnapshotOptions,
+  writeSnapshot,
+  writeSnapshotFile,
+  getSnapshotPath,
+} from './snapshot-writer';
+
+// Export snapshot reader
+export {
+  ReadSnapshotResult,
+  readSnapshot,
+  readSnapshotOrNull,
+  readSnapshotRequired,
+  snapshotExists,
+} from './snapshot-reader';
+
+// Export snapshot comparator
+export {
+  ActionsDiff,
+  RolesDiff,
+  SnapshotDiff,
+  compareSnapshots,
+  compareSnapshotFiles,
+  formatDiff,
+  snapshotsMatch,
+} from './snapshot-comparator';

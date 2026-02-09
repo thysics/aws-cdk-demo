@@ -1,7 +1,7 @@
 {
   "task_id": "task-20250706-0100",
   "task_description": "CLI permissions snapshot integration testing - Record IAM roles assumed and actions performed during integration tests as snapshots",
-  "status": "in_progress",
+  "status": "completed",
   "features": [
     {
       "id": "FEAT-001",
@@ -33,7 +33,7 @@
       "id": "FEAT-002",
       "type": "feat",
       "description": "Implement permissions snapshot file management and comparison",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Create `lib/snapshot-format.ts` defining the JSON schema for permissions snapshot files",
         "Implement snapshot format with sections: metadata (timestamp, test name), assumedRoles (sorted array of role ARNs), actions (sorted array of {service, action} objects)",
@@ -58,7 +58,7 @@
       "id": "FEAT-003",
       "type": "feat",
       "description": "Integrate permissions tracking with integration test execution flow",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Add `@aws-cdk/permissions-snapshot` as dependency to `tools/@aws-cdk/integration-test-deployment/package.json`",
         "Modify `lib/integration-test-runner.ts` to import and initialize PermissionsTracker before test execution",
@@ -84,7 +84,7 @@
       "id": "FEAT-004",
       "type": "docs",
       "description": "Add documentation and configuration options for permissions snapshot feature",
-      "status": "pending",
+      "status": "completed",
       "steps": [
         "Create `tools/@aws-cdk/permissions-snapshot/README.md` explaining the feature purpose, usage, and snapshot format",
         "Document how to interpret permissions snapshot diffs and common scenarios requiring updates",
