@@ -3,13 +3,38 @@ import { spawn } from 'child_process';
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 import { AtmosphereAllocation } from './atmosphere';
 import { getChangedSnapshots } from './utils';
+import {
+  PermissionsSnapshotRecorder,
+  instrumentClient,
+  resetGlobalCollector,
+} from './permissions-snapshot';
 
-export const deployIntegTests = async (props: {
+/**
+ * Options for running integration tests with permissions snapshot tracking.
+ */
+export interface DeployIntegTestsOptions {
   atmosphereRoleArn: string;
   endpoint: string;
   pool: string;
   batchSize?: number;
-}) => {
+  /**
+   * Whether to record and validate permissions snapshots.
+   * @default false
+   */
+  enablePermissionsSnapshot?: boolean;
+  /**
+   * Directory to store permissions snapshots.
+   * @default './permissions-snapshots'
+   */
+  permissionsSnapshotDirectory?: string;
+  /**
+   * Whether to update permissions snapshots instead of failing on mismatch.
+   * @default false
+   */
+  updatePermissionsSnapshots?: boolean;
+}
+
+export const deployIntegTests = async (props: DeployIntegTestsOptions) => {
   const batchSize = props.batchSize ?? 3;
 
   const changedSnapshots = await getChangedSnapshots();
@@ -22,7 +47,17 @@ export const deployIntegTests = async (props: {
 
   for (let i = 0; i < changedSnapshots.length; i += batchSize) {
     const batch = changedSnapshots.slice(i, i + batchSize);
-    const creds = await assumeAtmosphereRole(props.atmosphereRoleArn);
+    
+    // Create instrumented STS client if permissions snapshot is enabled
+    let stsClient: STSClient;
+    if (props.enablePermissionsSnapshot) {
+      resetGlobalCollector();
+      stsClient = instrumentClient(new STSClient({}));
+    } else {
+      stsClient = new STSClient({});
+    }
+    
+    const creds = await assumeAtmosphereRole(props.atmosphereRoleArn, stsClient);
     const allocation = await AtmosphereAllocation.acquire({
       endpoint: props.endpoint,
       pool: props.pool,
@@ -34,6 +69,19 @@ export const deployIntegTests = async (props: {
     });
     let outcome = 'failure';
 
+    // Set up permissions recorder if enabled
+    let recorder: PermissionsSnapshotRecorder | undefined;
+    if (props.enablePermissionsSnapshot) {
+      const testName = batch.map(s => s.replace(/\//g, '-')).join('_');
+      recorder = new PermissionsSnapshotRecorder({
+        testName,
+        snapshotDirectory: props.permissionsSnapshotDirectory ?? './permissions-snapshots',
+        updateSnapshots: props.updatePermissionsSnapshots ?? false,
+        failOnMismatch: !props.updatePermissionsSnapshots,
+      });
+      recorder.startRecording();
+    }
+
     try {
       const env = {
         PATH: process.env.PATH, // Allows the spawn process to find the yarn binary.
@@ -44,11 +92,23 @@ export const deployIntegTests = async (props: {
         AWS_ACCOUNT_ID: allocation.allocation.environment.account,
         TARGET_BRANCH_COMMIT: process.env.TARGET_BRANCH_COMMIT,
         SOURCE_BRANCH_COMMIT: process.env.SOURCE_BRANCH_COMMIT,
+        // Enable permissions tracking in child process if snapshot is enabled
+        CDK_PERMISSIONS_SNAPSHOT_ENABLED: props.enablePermissionsSnapshot ? 'true' : undefined,
+        CDK_PERMISSIONS_SNAPSHOT_VERBOSE: process.env.CDK_PERMISSIONS_SNAPSHOT_VERBOSE,
       };
 
       await bootstrap(env);
       await deployIntegrationTest(env, batch);
       outcome = 'success';
+      
+      // Validate permissions snapshot if enabled
+      if (recorder) {
+        const result = recorder.validate();
+        if (!result.match && !props.updatePermissionsSnapshots) {
+          console.log('Permissions snapshot validation failed!');
+          hasFailure = true;
+        }
+      }
     } catch (e) {
       console.error(e);
       hasFailure = true;
@@ -75,8 +135,8 @@ export const deployIntegTests = async (props: {
   }
 };
 
-export const assumeAtmosphereRole = async (roleArn: string) => {
-  const sts = new STSClient({});
+export const assumeAtmosphereRole = async (roleArn: string, client?: STSClient) => {
+  const sts = client ?? new STSClient({});
   const response = await sts.send(new AssumeRoleCommand({
     RoleArn: roleArn,
     RoleSessionName: 'run-tests@aws-cdk-deployment-integ',
