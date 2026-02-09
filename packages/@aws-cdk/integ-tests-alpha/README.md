@@ -73,7 +73,7 @@ interface StackUnderTestProps extends StackProps {
 class StackUnderTest extends Stack {
   constructor(scope: Construct, id: string, props: StackUnderTestProps) {
     super(scope, id, props);
-	
+        
     new lambda.Function(this, 'Handler', {
       runtime: lambda.Runtime.NODEJS_LATEST,
       handler: 'index.handler',
@@ -97,7 +97,7 @@ interface StackUnderTestProps extends StackProps {
 class StackUnderTest extends Stack {
   constructor(scope: Construct, id: string, props: StackUnderTestProps) {
     super(scope, id, props);
-	
+        
     new lambda.Function(this, 'Handler', {
       runtime: lambda.Runtime.NODEJS_LATEST,
       handler: 'index.handler',
@@ -422,10 +422,10 @@ message.expect(ExpectedResult.objectLike({
       Payload: Match.serializedJson({ key: 'value' }),
     },
     {
-	  Body: {
-	    Values: Match.arrayWith([{ Asdf: 3 }]),
-		Message: Match.stringLikeRegexp('message'),
-	  },
+          Body: {
+            Values: Match.arrayWith([{ Asdf: 3 }]),
+                Message: Match.stringLikeRegexp('message'),
+          },
     },
   ]),
 }));
@@ -574,4 +574,50 @@ const describe = testCase.assertions.awsApiCall('StepFunctions', 'describeExecut
   backoffRate: 3,
 });
 ```
+
+## Permissions Snapshot Testing
+
+This module also provides functionality to record and snapshot all IAM permissions (actions and role assumptions) used during integration test execution. This helps catch changes to IAM permissions that could break customer deployments with strict IAM policies.
+
+### Basic Usage
+
+```ts
+import { PermissionsSnapshotManager, installSdkCallRecorder } from '@aws-cdk/integ-tests-alpha';
+import { S3Client } from '@aws-sdk/client-s3';
+
+// Install the SDK call recorder on your clients
+const s3Client = new S3Client({});
+installSdkCallRecorder(s3Client);
+
+// Create a snapshot manager
+const snapshotManager = new PermissionsSnapshotManager('my-test', {
+  failOnChange: true,
+});
+
+snapshotManager.startRecording();
+// ... run your test operations ...
+snapshotManager.validateAgainstSnapshot('./test.snapshot/');
+```
+
+### Snapshot File Format
+
+Permissions snapshots are stored as JSON files with recorded actions and role assumptions:
+
+```json
+{
+  "version": "1.0",
+  "testName": "my-integ-test",
+  "actions": [
+    { "service": "s3", "action": "PutObject", "timestamp": "..." }
+  ],
+  "roleAssumptions": [
+    { "roleArn": "arn:aws:iam::123456789012:role/DeployRole", "timestamp": "..." }
+  ],
+  "actionSummary": [
+    { "service": "s3", "action": "PutObject", "count": 5 }
+  ]
+}
+```
+
+For more details, see the [Permissions Snapshot README](./lib/permissions-snapshot/README.md).
 
