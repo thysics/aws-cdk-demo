@@ -1,0 +1,107 @@
+{
+  "task_id": "task-20250706-0100",
+  "task_description": "CLI permissions snapshot integration testing - Record IAM roles assumed and actions performed during integration tests as snapshots",
+  "status": "in_progress",
+  "features": [
+    {
+      "id": "FEAT-001",
+      "type": "feat",
+      "description": "Create core permissions tracking module with AWS SDK v3 middleware",
+      "status": "pending",
+      "steps": [
+        "Create new package directory `tools/@aws-cdk/permissions-snapshot/` with standard structure (package.json, tsconfig.json, jest.config.js, eslint.config.mjs)",
+        "Create `lib/sdk-middleware.ts` implementing AWS SDK v3 middleware plugin that intercepts all API calls before sending",
+        "Implement middleware to extract and record: service name (e.g., 's3'), action name (e.g., 'PutObject'), request parameters (sanitized)",
+        "Add special handling for STS service to track AssumeRole, AssumeRoleWithSAML, AssumeRoleWithWebIdentity calls and record assumed role ARNs",
+        "Create `lib/permissions-tracker.ts` with PermissionsTracker class providing: start(), stop(), getRecordedPermissions(), clear() methods",
+        "Implement thread-safe collection of permissions data using a singleton pattern to work across multiple SDK client instances",
+        "Create `lib/types.ts` defining TypeScript interfaces: RecordedAction, RecordedRole, PermissionsSnapshot",
+        "Create `lib/index.ts` with clean public API exports",
+        "Add unit tests in `test/sdk-middleware.test.ts` using aws-sdk-client-mock to verify middleware correctly intercepts calls",
+        "Add unit tests in `test/permissions-tracker.test.ts` to verify tracker accumulates and deduplicates permissions"
+      ],
+      "acceptance_criteria": [
+        "SDK middleware successfully intercepts AWS SDK v3 API calls without affecting their execution",
+        "All API calls are recorded with service name, action name in a normalized format",
+        "STS AssumeRole calls specifically capture the role ARN being assumed",
+        "PermissionsTracker can be started/stopped and provides deduplicated results",
+        "Unit tests pass with >80% code coverage",
+        "Package builds successfully with `yarn build`"
+      ]
+    },
+    {
+      "id": "FEAT-002",
+      "type": "feat",
+      "description": "Implement permissions snapshot file management and comparison",
+      "status": "pending",
+      "steps": [
+        "Create `lib/snapshot-format.ts` defining the JSON schema for permissions snapshot files",
+        "Implement snapshot format with sections: metadata (timestamp, test name), assumedRoles (sorted array of role ARNs), actions (sorted array of {service, action} objects)",
+        "Create `lib/snapshot-writer.ts` with function to write PermissionsSnapshot to a `.permissions.snapshot.json` file",
+        "Create `lib/snapshot-reader.ts` with function to read existing snapshot file or return null if not exists",
+        "Create `lib/snapshot-comparator.ts` implementing deep comparison of two snapshots, returning detailed diff",
+        "Implement diff output showing: added roles, removed roles, added actions, removed actions",
+        "Add `lib/snapshot-utils.ts` with helper functions: normalizeSnapshot (sort and deduplicate), formatDiff (human-readable output)",
+        "Add unit tests in `test/snapshot-writer.test.ts` verifying correct file output format",
+        "Add unit tests in `test/snapshot-reader.test.ts` verifying reading and parsing of snapshot files",
+        "Add unit tests in `test/snapshot-comparator.test.ts` verifying accurate diff detection"
+      ],
+      "acceptance_criteria": [
+        "Snapshot files are written in deterministic order (sorted) for consistent git diffs",
+        "Snapshot comparison correctly identifies additions and removals",
+        "Missing snapshot file is handled gracefully (treated as empty for comparison)",
+        "Snapshot format is human-readable JSON with proper indentation",
+        "All snapshot operations are idempotent (same input produces same output)"
+      ]
+    },
+    {
+      "id": "FEAT-003",
+      "type": "feat",
+      "description": "Integrate permissions tracking with integration test execution flow",
+      "status": "pending",
+      "steps": [
+        "Add `@aws-cdk/permissions-snapshot` as dependency to `tools/@aws-cdk/integration-test-deployment/package.json`",
+        "Modify `lib/integration-test-runner.ts` to import and initialize PermissionsTracker before test execution",
+        "Add middleware registration to intercept SDK calls made during `cdk bootstrap` and `cdk deploy` operations",
+        "Implement snapshot file path resolution: place `.permissions.snapshot.json` alongside existing `.snapshot` directory",
+        "Add logic after test execution to compare recorded permissions against existing snapshot",
+        "Implement test failure when permissions snapshot differs and `--update-snapshots` flag is not set",
+        "Add `--update-permissions-snapshot` CLI flag to update permissions snapshots on intentional changes",
+        "Add `--skip-permissions-snapshot` CLI flag to disable permissions tracking for specific test runs",
+        "Modify test output to clearly indicate when permissions snapshot comparison fails with actionable diff",
+        "Update `bin/index.ts` to parse and pass through the new CLI flags"
+      ],
+      "acceptance_criteria": [
+        "Integration tests record permissions during execution without affecting test behavior",
+        "Permissions snapshots are created in predictable location alongside template snapshots",
+        "Tests fail with clear error message when permissions change unexpectedly",
+        "The `--update-permissions-snapshot` flag successfully updates snapshot files",
+        "The `--skip-permissions-snapshot` flag bypasses all permissions tracking",
+        "Existing integration test functionality remains unchanged when permissions tracking is disabled"
+      ]
+    },
+    {
+      "id": "FEAT-004",
+      "type": "docs",
+      "description": "Add documentation and configuration options for permissions snapshot feature",
+      "status": "pending",
+      "steps": [
+        "Create `tools/@aws-cdk/permissions-snapshot/README.md` explaining the feature purpose, usage, and snapshot format",
+        "Document how to interpret permissions snapshot diffs and common scenarios requiring updates",
+        "Add configuration file support `permissions-snapshot.config.json` for customization options",
+        "Implement ignore patterns to exclude specific services or actions from tracking (e.g., CloudWatch Logs for debugging)",
+        "Add section to main repository CONTRIBUTING.md explaining permissions snapshot workflow for contributors",
+        "Document the aggregated snapshot analysis use case - how to extract all permissions needed for a CDK command",
+        "Create example showing typical CI/CD integration and how to handle snapshot updates in PRs",
+        "Add inline JSDoc comments to all public APIs in the permissions-snapshot package"
+      ],
+      "acceptance_criteria": [
+        "README clearly explains what permissions snapshots are and why they exist",
+        "Configuration options are documented with examples",
+        "Contributors understand how to update permissions snapshots when making legitimate changes",
+        "Documentation explains how to use aggregated snapshots to derive minimum IAM permissions",
+        "All public APIs have JSDoc comments that appear in IDE intellisense"
+      ]
+    }
+  ]
+}
