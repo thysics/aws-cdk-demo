@@ -24,6 +24,7 @@ export * from './states/distributed-map';
 export * from './states/distributed-map/item-batcher';
 export * from './states/distributed-map/item-reader';
 export * from './states/distributed-map/result-writer';
+export * from './states/result-writer';
 export * from './states/custom-state';
 
 export * from './states/map-base';
