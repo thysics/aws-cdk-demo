@@ -5295,6 +5295,64 @@ describe('L1 Relationships', () => {
       },
     });
   });
+
+  describe('maxSessionDuration', () => {
+    test('sets MaxSessionDuration on the execution role', () => {
+      const stack = new cdk.Stack();
+
+      new lambda.Function(stack, 'MyLambda', {
+        code: new lambda.InlineCode('foo'),
+        handler: 'index.handler',
+        runtime: lambda.Runtime.NODEJS_LATEST,
+        maxSessionDuration: cdk.Duration.hours(2),
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::IAM::Role', {
+        MaxSessionDuration: 7200,
+      });
+    });
+
+    test('throws when maxSessionDuration is less than 1 hour', () => {
+      const stack = new cdk.Stack();
+
+      expect(() => new lambda.Function(stack, 'MyLambda', {
+        code: new lambda.InlineCode('foo'),
+        handler: 'index.handler',
+        runtime: lambda.Runtime.NODEJS_LATEST,
+        maxSessionDuration: cdk.Duration.minutes(30),
+      })).toThrow(/maxSessionDuration is set to 1800, but must be >= 3600sec \(1hr\) and <= 43200sec \(12hrs\)/);
+    });
+
+    test('throws when maxSessionDuration exceeds 12 hours', () => {
+      const stack = new cdk.Stack();
+
+      expect(() => new lambda.Function(stack, 'MyLambda', {
+        code: new lambda.InlineCode('foo'),
+        handler: 'index.handler',
+        runtime: lambda.Runtime.NODEJS_LATEST,
+        maxSessionDuration: cdk.Duration.hours(13),
+      })).toThrow(/maxSessionDuration is set to 46800, but must be >= 3600sec \(1hr\) and <= 43200sec \(12hrs\)/);
+    });
+
+    test('does not affect the role when a custom role is provided', () => {
+      const stack = new cdk.Stack();
+      const role = new iam.Role(stack, 'MyRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      });
+
+      new lambda.Function(stack, 'MyLambda', {
+        code: new lambda.InlineCode('foo'),
+        handler: 'index.handler',
+        runtime: lambda.Runtime.NODEJS_LATEST,
+        role,
+        maxSessionDuration: cdk.Duration.hours(2),
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::IAM::Role', {
+        MaxSessionDuration: Match.absent(),
+      });
+    });
+  });
 });
 
 function newTestLambda(scope: constructs.Construct) {
