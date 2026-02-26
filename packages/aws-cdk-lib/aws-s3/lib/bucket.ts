@@ -1491,6 +1491,34 @@ export interface IntelligentTieringConfiguration {
    * @default Objects will not move to Glacier Deep Access
    */
   readonly deepArchiveAccessTierTime?: Duration;
+
+  /**
+   * A list of S3 Intelligent-Tiering access tier configurations.
+   *
+   * Each entry specifies an access tier and the number of days
+   * before objects transition to that tier.
+   *
+   * @default - No additional tierings beyond archiveAccessTierTime and deepArchiveAccessTierTime.
+   */
+  readonly tierings?: Tiering[];
+}
+
+/**
+ * Represents a tiering configuration for S3 Intelligent-Tiering.
+ */
+export interface Tiering {
+  /**
+   * The S3 Intelligent-Tiering access tier.
+   *
+   * For example, 'ARCHIVE_ACCESS' or 'DEEP_ARCHIVE_ACCESS'.
+   */
+  readonly accessTier: string;
+
+  /**
+   * The number of consecutive days of no access after which an object
+   * will be eligible to be transitioned to the corresponding tier.
+   */
+  readonly days: number;
 }
 
 /**
@@ -2825,6 +2853,14 @@ export class Bucket extends BucketBase {
           accessTier: 'DEEP_ARCHIVE_ACCESS',
           days: config.deepArchiveAccessTierTime.toDays({ integral: true }),
         });
+      }
+      if (config.tierings) {
+        for (const t of config.tierings) {
+          tierings.push({
+            accessTier: t.accessTier,
+            days: t.days,
+          });
+        }
       }
       return {
         id: config.name,
