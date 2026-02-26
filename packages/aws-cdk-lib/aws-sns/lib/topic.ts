@@ -4,6 +4,7 @@ import type { ITopic } from './topic-base';
 import { TopicBase } from './topic-base';
 import type { IRoleRef } from '../../aws-iam';
 import type { IKey } from '../../aws-kms';
+import type { ILogGroup } from '../../aws-logs';
 import { Key } from '../../aws-kms';
 import { ArnFormat, Lazy, Names, Stack, Token } from '../../core';
 import { ValidationError } from '../../core/lib/errors';
@@ -65,6 +66,14 @@ export interface TopicProps {
    * @default None
    */
   readonly loggingConfigs?: LoggingConfig[];
+
+  /**
+   * Logging configuration for the SNS topic, specifying a CloudWatch Log Group
+   * and the protocol for delivery status logging.
+   *
+   * @default None
+   */
+  readonly loggingConfiguration?: LoggingConfiguration;
 
   /**
    * The number of days Amazon SNS retains messages.
@@ -240,6 +249,23 @@ export interface TopicAttributes {
 }
 
 /**
+ * Configuration for logging SNS topic activity to a CloudWatch Log Group.
+ */
+export interface LoggingConfiguration {
+  /**
+   * The CloudWatch log group to which the SNS topic sends logs.
+   */
+  readonly logGroup: ILogGroup;
+
+  /**
+   * The protocol for which to enable logging.
+   *
+   * For example, 'sqs', 'lambda', or 'http/s'.
+   */
+  readonly protocol: LoggingProtocol;
+}
+
+/**
  * A new SNS topic
  */
 @propertyInjectable
@@ -313,6 +339,8 @@ export class Topic extends TopicBase {
 
   private readonly loggingConfigs: LoggingConfig[] = [];
 
+  private readonly _loggingConfiguration?: LoggingConfiguration;
+
   constructor(scope: Construct, id: string, props: TopicProps = {}) {
     super(scope, id, {
       physicalName: props.topicName,
@@ -341,6 +369,10 @@ export class Topic extends TopicBase {
 
     if (props.loggingConfigs) {
       props.loggingConfigs.forEach(c => this.addLoggingConfig(c));
+    }
+
+    if (props.loggingConfiguration) {
+      this._loggingConfiguration = props.loggingConfiguration;
     }
 
     let cfnTopicName: string;
@@ -411,7 +443,23 @@ export class Topic extends TopicBase {
       };
     };
 
-    return this.loggingConfigs.map(renderLoggingConfig);
+    const configs = this.loggingConfigs.map(renderLoggingConfig);
+
+    const loggingConfigurationEntry = this.renderLoggingConfiguration();
+    if (loggingConfigurationEntry) {
+      configs.push(loggingConfigurationEntry);
+    }
+
+    return configs;
+  }
+
+  private renderLoggingConfiguration(): CfnTopic.LoggingConfigProperty | undefined {
+    if (!this._loggingConfiguration) {
+      return undefined;
+    }
+    return {
+      protocol: this._loggingConfiguration.protocol,
+    } as CfnTopic.LoggingConfigProperty;
   }
 
   /**

@@ -4,6 +4,7 @@ import * as iam from '../../aws-iam';
 import { ServicePrincipal } from '../../aws-iam';
 import * as kms from '../../aws-kms';
 import { CfnKey } from '../../aws-kms';
+import * as logs from '../../aws-logs';
 import * as cdk from '../../core';
 import * as sns from '../lib';
 import { TopicGrants } from '../lib';
@@ -938,6 +939,109 @@ describe('Topic', () => {
 
     // THEN
     expect(() => app.synth()).toThrow(/Success feedback sample rate must be an integer between 0 and 100/);
+  });
+
+  test('specify loggingConfiguration with log group and protocol', () => {
+    // GIVEN
+    const stack = new cdk.Stack();
+    const logGroup = new logs.LogGroup(stack, 'LogGroup');
+
+    // WHEN
+    new sns.Topic(stack, 'MyTopic', {
+      loggingConfiguration: {
+        logGroup: logGroup,
+        protocol: sns.LoggingProtocol.SQS,
+      },
+    });
+
+    // THEN
+    Template.fromStack(stack).hasResourceProperties('AWS::SNS::Topic', {
+      'DeliveryStatusLogging': [{
+        'Protocol': 'sqs',
+      }],
+    });
+  });
+
+  test('loggingConfiguration works alongside loggingConfigs', () => {
+    // GIVEN
+    const stack = new cdk.Stack();
+    const logGroup = new logs.LogGroup(stack, 'LogGroup');
+    const feedbackRole = new iam.Role(stack, 'feedbackRole', {
+      assumedBy: new iam.ServicePrincipal('sns.amazonaws.com'),
+    });
+
+    // WHEN
+    new sns.Topic(stack, 'MyTopic', {
+      loggingConfigs: [
+        {
+          protocol: sns.LoggingProtocol.HTTP,
+          failureFeedbackRole: feedbackRole,
+          successFeedbackRole: feedbackRole,
+          successFeedbackSampleRate: 50,
+        },
+      ],
+      loggingConfiguration: {
+        logGroup: logGroup,
+        protocol: sns.LoggingProtocol.LAMBDA,
+      },
+    });
+
+    // THEN
+    Template.fromStack(stack).hasResourceProperties('AWS::SNS::Topic', {
+      'DeliveryStatusLogging': [
+        {
+          'Protocol': 'http/s',
+          'SuccessFeedbackRoleArn': { 'Fn::GetAtt': ['feedbackRole2010903F', 'Arn'] },
+          'FailureFeedbackRoleArn': { 'Fn::GetAtt': ['feedbackRole2010903F', 'Arn'] },
+          'SuccessFeedbackSampleRate': '50',
+        },
+        {
+          'Protocol': 'lambda',
+        },
+      ],
+    });
+  });
+
+  test('specify loggingConfiguration with lambda protocol', () => {
+    // GIVEN
+    const stack = new cdk.Stack();
+    const logGroup = new logs.LogGroup(stack, 'LogGroup');
+
+    // WHEN
+    new sns.Topic(stack, 'MyTopic', {
+      loggingConfiguration: {
+        logGroup: logGroup,
+        protocol: sns.LoggingProtocol.LAMBDA,
+      },
+    });
+
+    // THEN
+    Template.fromStack(stack).hasResourceProperties('AWS::SNS::Topic', {
+      'DeliveryStatusLogging': [{
+        'Protocol': 'lambda',
+      }],
+    });
+  });
+
+  test('specify loggingConfiguration with http/s protocol', () => {
+    // GIVEN
+    const stack = new cdk.Stack();
+    const logGroup = new logs.LogGroup(stack, 'LogGroup');
+
+    // WHEN
+    new sns.Topic(stack, 'MyTopic', {
+      loggingConfiguration: {
+        logGroup: logGroup,
+        protocol: sns.LoggingProtocol.HTTP,
+      },
+    });
+
+    // THEN
+    Template.fromStack(stack).hasResourceProperties('AWS::SNS::Topic', {
+      'DeliveryStatusLogging': [{
+        'Protocol': 'http/s',
+      }],
+    });
   });
 
   describe('message retention period', () => {
