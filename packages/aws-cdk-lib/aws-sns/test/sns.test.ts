@@ -1,8 +1,9 @@
-import { Template } from '../../assertions';
+import { Match, Template } from '../../assertions';
 import * as notifications from '../../aws-codestarnotifications';
 import * as iam from '../../aws-iam';
 import { ServicePrincipal } from '../../aws-iam';
 import * as kms from '../../aws-kms';
+import * as logs from '../../aws-logs';
 import { CfnKey } from '../../aws-kms';
 import * as cdk from '../../core';
 import * as sns from '../lib';
@@ -1031,6 +1032,88 @@ describe('Topic', () => {
           fifoThroughputScope: sns.FifoThroughputScope.MESSAGE_GROUP,
         }),
       ).toThrow('`fifoThroughputScope` can only be set for FIFO SNS topics.');
+    });
+  });
+
+  describe('loggingConfiguration', () => {
+    test('can configure logging with a log group and sqs protocol', () => {
+      // GIVEN
+      const stack = new cdk.Stack();
+      const logGroup = new logs.LogGroup(stack, 'LogGroup');
+
+      // WHEN
+      new sns.Topic(stack, 'MyTopic', {
+        loggingConfiguration: {
+          logGroup: logGroup,
+          protocol: sns.LoggingProtocol.SQS,
+        },
+      });
+
+      // THEN
+      Template.fromStack(stack).hasResourceProperties('AWS::SNS::Topic', {
+        LoggingConfig: {
+          Protocol: 'sqs',
+          LogGroupArn: { 'Fn::GetAtt': ['LogGroupF5B46931', 'Arn'] },
+        },
+      });
+    });
+
+    test('can configure logging with lambda protocol', () => {
+      // GIVEN
+      const stack = new cdk.Stack();
+      const logGroup = new logs.LogGroup(stack, 'LogGroup');
+
+      // WHEN
+      new sns.Topic(stack, 'MyTopic', {
+        loggingConfiguration: {
+          logGroup: logGroup,
+          protocol: sns.LoggingProtocol.LAMBDA,
+        },
+      });
+
+      // THEN
+      Template.fromStack(stack).hasResourceProperties('AWS::SNS::Topic', {
+        LoggingConfig: {
+          Protocol: 'lambda',
+          LogGroupArn: { 'Fn::GetAtt': ['LogGroupF5B46931', 'Arn'] },
+        },
+      });
+    });
+
+    test('can configure logging with http/s protocol', () => {
+      // GIVEN
+      const stack = new cdk.Stack();
+      const logGroup = new logs.LogGroup(stack, 'LogGroup');
+
+      // WHEN
+      new sns.Topic(stack, 'MyTopic', {
+        loggingConfiguration: {
+          logGroup: logGroup,
+          protocol: sns.LoggingProtocol.HTTP,
+        },
+      });
+
+      // THEN
+      Template.fromStack(stack).hasResourceProperties('AWS::SNS::Topic', {
+        LoggingConfig: {
+          Protocol: 'http/s',
+          LogGroupArn: { 'Fn::GetAtt': ['LogGroupF5B46931', 'Arn'] },
+        },
+      });
+    });
+
+    test('no LoggingConfig when loggingConfiguration is not specified', () => {
+      // GIVEN
+      const stack = new cdk.Stack();
+
+      // WHEN
+      new sns.Topic(stack, 'MyTopic');
+
+      // THEN
+      const template = Template.fromStack(stack);
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        LoggingConfig: Match.absent(),
+      });
     });
   });
 });

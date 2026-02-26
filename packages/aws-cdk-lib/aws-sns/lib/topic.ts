@@ -4,6 +4,7 @@ import type { ITopic } from './topic-base';
 import { TopicBase } from './topic-base';
 import type { IRoleRef } from '../../aws-iam';
 import type { IKey } from '../../aws-kms';
+import type { ILogGroup } from '../../aws-logs';
 import { Key } from '../../aws-kms';
 import { ArnFormat, Lazy, Names, Stack, Token } from '../../core';
 import { ValidationError } from '../../core/lib/errors';
@@ -65,6 +66,16 @@ export interface TopicProps {
    * @default None
    */
   readonly loggingConfigs?: LoggingConfig[];
+
+  /**
+   * Logging configuration for delivery status of messages sent from the topic.
+   *
+   * Configures a CloudWatch Logs log group to receive delivery status logs
+   * for the specified protocol.
+   *
+   * @default - no logging configuration
+   */
+  readonly loggingConfiguration?: TopicLoggingConfig;
 
   /**
    * The number of days Amazon SNS retains messages.
@@ -197,6 +208,23 @@ export enum LoggingProtocol {
    * Platform application endpoint
    */
   APPLICATION = 'application',
+}
+
+/**
+ * Configuration for logging messages published to the topic to CloudWatch Logs.
+ */
+export interface TopicLoggingConfig {
+  /**
+   * The CloudWatch Logs log group to which SNS delivery status logs are sent.
+   */
+  readonly logGroup: ILogGroup;
+
+  /**
+   * The protocol for which to enable logging.
+   *
+   * For example, 'sqs', 'lambda', or 'http/s'.
+   */
+  readonly protocol: LoggingProtocol;
 }
 
 /**
@@ -386,6 +414,13 @@ export class Topic extends TopicBase {
     });
 
     this._resource = resource;
+
+    if (props.loggingConfiguration) {
+      resource.addPropertyOverride('LoggingConfig', {
+        Protocol: props.loggingConfiguration.protocol,
+        LogGroupArn: props.loggingConfiguration.logGroup.logGroupArn,
+      });
+    }
     this.masterKey = props.masterKey;
     this.fifo = props.fifo || false;
     this.contentBasedDeduplication = props.contentBasedDeduplication || false;
