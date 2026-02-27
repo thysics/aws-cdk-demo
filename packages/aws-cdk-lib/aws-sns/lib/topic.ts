@@ -4,6 +4,7 @@ import type { ITopic } from './topic-base';
 import { TopicBase } from './topic-base';
 import type { IRoleRef } from '../../aws-iam';
 import type { IKey } from '../../aws-kms';
+import type { ILogGroup } from '../../aws-logs';
 import { Key } from '../../aws-kms';
 import { ArnFormat, Lazy, Names, Stack, Token } from '../../core';
 import { ValidationError } from '../../core/lib/errors';
@@ -65,6 +66,18 @@ export interface TopicProps {
    * @default None
    */
   readonly loggingConfigs?: LoggingConfig[];
+
+  /**
+   * The logging configuration for the SNS topic.
+   *
+   * Configures sending of topic logs to a CloudWatch Logs log group
+   * for the specified protocol.
+   *
+   * @see https://docs.aws.amazon.com/sns/latest/dg/sns-topic-attributes.html
+   *
+   * @default - No logging configuration
+   */
+  readonly loggingConfiguration?: TopicLoggingConfig[];
 
   /**
    * The number of days Amazon SNS retains messages.
@@ -200,6 +213,23 @@ export enum LoggingProtocol {
 }
 
 /**
+ * Configuration for logging SNS topic activity to a CloudWatch Logs log group.
+ *
+ * @see https://docs.aws.amazon.com/sns/latest/dg/sns-topic-attributes.html
+ */
+export interface TopicLoggingConfig {
+  /**
+   * The CloudWatch Logs log group to which SNS topic logs are sent.
+   */
+  readonly logGroup: ILogGroup;
+
+  /**
+   * Indicates one of the supported protocols for the SNS topic logging.
+   */
+  readonly protocol: LoggingProtocol;
+}
+
+/**
  * The tracing mode of an Amazon SNS topic
  */
 export enum TracingConfig {
@@ -313,6 +343,8 @@ export class Topic extends TopicBase {
 
   private readonly loggingConfigs: LoggingConfig[] = [];
 
+  private readonly topicLoggingConfigs: TopicLoggingConfig[] = [];
+
   constructor(scope: Construct, id: string, props: TopicProps = {}) {
     super(scope, id, {
       physicalName: props.topicName,
@@ -341,6 +373,10 @@ export class Topic extends TopicBase {
 
     if (props.loggingConfigs) {
       props.loggingConfigs.forEach(c => this.addLoggingConfig(c));
+    }
+
+    if (props.loggingConfiguration) {
+      props.loggingConfiguration.forEach(c => this.topicLoggingConfigs.push(c));
     }
 
     let cfnTopicName: string;
@@ -385,6 +421,8 @@ export class Topic extends TopicBase {
       fifoThroughputScope: props.fifoThroughputScope,
     });
 
+    resource.addPropertyOverride('LoggingConfig', Lazy.any({ produce: () => this.renderTopicLoggingConfigs() }, { omitEmptyArray: true }));
+
     this._resource = resource;
     this.masterKey = props.masterKey;
     this.fifo = props.fifo || false;
@@ -412,6 +450,13 @@ export class Topic extends TopicBase {
     };
 
     return this.loggingConfigs.map(renderLoggingConfig);
+  }
+
+  private renderTopicLoggingConfigs(): any[] {
+    return this.topicLoggingConfigs.map(config => ({
+      Protocol: config.protocol,
+      LogDestination: config.logGroup.logGroupArn,
+    }));
   }
 
   /**
