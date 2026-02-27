@@ -3988,6 +3988,132 @@ describe('bucket', () => {
     });
   });
 
+  test('bucket with intelligent tiering using tierings array', () => {
+    const stack = new cdk.Stack();
+    new s3.Bucket(stack, 'MyBucket', {
+      intelligentTieringConfigurations: [{
+        name: 'foo',
+        tierings: [{
+          accessTier: 'ARCHIVE_ACCESS',
+          days: 125,
+        }],
+      }],
+    });
+
+    Template.fromStack(stack).templateMatches({
+      'Resources': {
+        'MyBucketF68F3FF0': {
+          'Type': 'AWS::S3::Bucket',
+          'Properties': {
+            'IntelligentTieringConfigurations': [
+              {
+                'Id': 'foo',
+                'Status': 'Enabled',
+                'Tierings': [{
+                  'AccessTier': 'ARCHIVE_ACCESS',
+                  'Days': 125,
+                }],
+              },
+            ],
+          },
+          'DeletionPolicy': 'Retain',
+          'UpdateReplacePolicy': 'Retain',
+        },
+      },
+    });
+  });
+
+  test('bucket with intelligent tiering using tierings array and prefix', () => {
+    const stack = new cdk.Stack();
+    new s3.Bucket(stack, 'MyBucket', {
+      intelligentTieringConfigurations: [{
+        name: 'foo',
+        prefix: 'bar',
+        tierings: [
+          {
+            accessTier: 'ARCHIVE_ACCESS',
+            days: 90,
+          },
+          {
+            accessTier: 'DEEP_ARCHIVE_ACCESS',
+            days: 180,
+          },
+        ],
+      }],
+    });
+
+    Template.fromStack(stack).templateMatches({
+      'Resources': {
+        'MyBucketF68F3FF0': {
+          'Type': 'AWS::S3::Bucket',
+          'Properties': {
+            'IntelligentTieringConfigurations': [
+              {
+                'Id': 'foo',
+                'Prefix': 'bar',
+                'Status': 'Enabled',
+                'Tierings': [
+                  {
+                    'AccessTier': 'ARCHIVE_ACCESS',
+                    'Days': 90,
+                  },
+                  {
+                    'AccessTier': 'DEEP_ARCHIVE_ACCESS',
+                    'Days': 180,
+                  },
+                ],
+              },
+            ],
+          },
+          'DeletionPolicy': 'Retain',
+          'UpdateReplacePolicy': 'Retain',
+        },
+      },
+    });
+  });
+
+  test('bucket with intelligent tiering combining Duration props and tierings array', () => {
+    const stack = new cdk.Stack();
+    new s3.Bucket(stack, 'MyBucket', {
+      intelligentTieringConfigurations: [{
+        name: 'foo',
+        archiveAccessTierTime: cdk.Duration.days(90),
+        tierings: [{
+          accessTier: 'DEEP_ARCHIVE_ACCESS',
+          days: 180,
+        }],
+      }],
+    });
+
+    Template.fromStack(stack).templateMatches({
+      'Resources': {
+        'MyBucketF68F3FF0': {
+          'Type': 'AWS::S3::Bucket',
+          'Properties': {
+            'IntelligentTieringConfigurations': [
+              {
+                'Id': 'foo',
+                'Status': 'Enabled',
+                'Tierings': [
+                  {
+                    'AccessTier': 'ARCHIVE_ACCESS',
+                    'Days': 90,
+                  },
+                  {
+                    'AccessTier': 'DEEP_ARCHIVE_ACCESS',
+                    'Days': 180,
+                  },
+                ],
+              },
+            ],
+          },
+          'DeletionPolicy': 'Retain',
+          'UpdateReplacePolicy': 'Retain',
+        },
+      },
+    });
+  });
+
   test('Event Bridge notification can be enabled after the bucket is created', () => {
     const stack = new cdk.Stack();
     const bucket = new s3.Bucket(stack, 'MyBucket');
