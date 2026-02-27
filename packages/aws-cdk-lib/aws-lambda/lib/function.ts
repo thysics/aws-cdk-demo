@@ -250,6 +250,19 @@ export interface FunctionOptions extends EventInvokeConfigOptions {
   readonly role?: iam.IRole;
 
   /**
+   * The maximum session duration for the function's execution role.
+   *
+   * This sets the maximum duration of a session that the function's
+   * execution role can assume. The value must be between 1 hour and 12 hours.
+   *
+   * This only applies to the auto-created execution role. If you provide
+   * a custom role via the `role` property, this setting is ignored.
+   *
+   * @default - Duration.hours(1) (IAM default)
+   */
+  readonly maxSessionDuration?: Duration;
+
+  /**
    * VPC network to place Lambda network interfaces
    *
    * Specify this if the Lambda function needs to access resources in a VPC.
@@ -1005,6 +1018,13 @@ export class Function extends FunctionBase {
       }
     }
 
+    if (props.maxSessionDuration) {
+      const maxSessionDurationSeconds = props.maxSessionDuration.toSeconds();
+      if (!Token.isUnresolved(maxSessionDurationSeconds) && (maxSessionDurationSeconds < 3600 || maxSessionDurationSeconds > 43200)) {
+        throw new ValidationError(`maxSessionDuration must be between 1 hour (Duration.hours(1)) and 12 hours (Duration.hours(12)), got ${Duration.seconds(maxSessionDurationSeconds)}`, this);
+      }
+    }
+
     const managedPolicies = new Array<iam.IManagedPolicy>();
 
     // the arn is in the form of - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
@@ -1022,6 +1042,7 @@ export class Function extends FunctionBase {
     this.role = props.role || new iam.Role(this, 'ServiceRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies,
+      maxSessionDuration: props.maxSessionDuration,
     });
     this.grantPrincipal = this.role;
     this.tenancyConfig = props.tenancyConfig;

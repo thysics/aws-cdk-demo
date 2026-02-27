@@ -5295,6 +5295,60 @@ describe('L1 Relationships', () => {
       },
     });
   });
+  describe('maxSessionDuration', () => {
+    test('can set maxSessionDuration on the execution role', () => {
+      const stack = new cdk.Stack();
+
+      new lambda.Function(stack, 'MyLambda', {
+        code: new lambda.InlineCode('foo'),
+        handler: 'index.handler',
+        runtime: lambda.Runtime.NODEJS_LATEST,
+        maxSessionDuration: cdk.Duration.hours(2),
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::IAM::Role', {
+        MaxSessionDuration: 7200,
+      });
+    });
+
+    test('maxSessionDuration is not set on role when not specified', () => {
+      const stack = new cdk.Stack();
+
+      new lambda.Function(stack, 'MyLambda', {
+        code: new lambda.InlineCode('foo'),
+        handler: 'index.handler',
+        runtime: lambda.Runtime.NODEJS_LATEST,
+      });
+
+      const template = Template.fromStack(stack);
+      const roles = template.findResources('AWS::IAM::Role');
+      for (const role of Object.values(roles)) {
+        expect((role as any).Properties).not.toHaveProperty('MaxSessionDuration');
+      }
+    });
+
+    test('throws when maxSessionDuration is less than 1 hour', () => {
+      const stack = new cdk.Stack();
+
+      expect(() => new lambda.Function(stack, 'MyLambda', {
+        code: new lambda.InlineCode('foo'),
+        handler: 'index.handler',
+        runtime: lambda.Runtime.NODEJS_LATEST,
+        maxSessionDuration: cdk.Duration.minutes(30),
+      })).toThrow(/maxSessionDuration must be between/);
+    });
+
+    test('throws when maxSessionDuration is greater than 12 hours', () => {
+      const stack = new cdk.Stack();
+
+      expect(() => new lambda.Function(stack, 'MyLambda', {
+        code: new lambda.InlineCode('foo'),
+        handler: 'index.handler',
+        runtime: lambda.Runtime.NODEJS_LATEST,
+        maxSessionDuration: cdk.Duration.hours(13),
+      })).toThrow(/maxSessionDuration must be between/);
+    });
+  });
 });
 
 function newTestLambda(scope: constructs.Construct) {
