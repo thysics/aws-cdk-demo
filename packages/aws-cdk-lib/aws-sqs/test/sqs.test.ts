@@ -1078,6 +1078,82 @@ describe('redriveAllowPolicy', () => {
   });
 });
 
+describe('redrivePolicy', () => {
+  test('configures CloudFormation RedrivePolicy', () => {
+    const stack = new Stack();
+    const dlq = new sqs.Queue(stack, 'DLQ');
+    new sqs.Queue(stack, 'Queue', {
+      redrivePolicy: {
+        deadLetterQueue: dlq,
+        maxReceiveCount: 5,
+      },
+    });
+
+    Template.fromStack(stack).hasResourceProperties('AWS::SQS::Queue', Match.objectLike({
+      RedrivePolicy: Match.objectLike({
+        deadLetterTargetArn: { 'Fn::GetAtt': ['DLQ581697C4', 'Arn'] },
+        maxReceiveCount: 5,
+      }),
+    }));
+  });
+
+  test('throws when maxReceiveCount is less than 1', () => {
+    const stack = new Stack();
+    const dlq = new sqs.Queue(stack, 'DLQ');
+    expect(() => new sqs.Queue(stack, 'Queue', {
+      redrivePolicy: {
+        deadLetterQueue: dlq,
+        maxReceiveCount: 0,
+      },
+    })).toThrow(/redrive policy maxReceiveCount must be between 1 and 1000, but 0 was provided/);
+  });
+
+  test('throws when maxReceiveCount exceeds 1000', () => {
+    const stack = new Stack();
+    const dlq = new sqs.Queue(stack, 'DLQ');
+    expect(() => new sqs.Queue(stack, 'Queue', {
+      redrivePolicy: {
+        deadLetterQueue: dlq,
+        maxReceiveCount: 1001,
+      },
+    })).toThrow(/redrive policy maxReceiveCount must be between 1 and 1000, but 1001 was provided/);
+  });
+
+  test('accepts maxReceiveCount at lower bound (1)', () => {
+    const stack = new Stack();
+    const dlq = new sqs.Queue(stack, 'DLQ');
+    expect(() => new sqs.Queue(stack, 'Queue', {
+      redrivePolicy: {
+        deadLetterQueue: dlq,
+        maxReceiveCount: 1,
+      },
+    })).not.toThrow();
+  });
+
+  test('accepts maxReceiveCount at upper bound (1000)', () => {
+    const stack = new Stack();
+    const dlq = new sqs.Queue(stack, 'DLQ');
+    expect(() => new sqs.Queue(stack, 'Queue', {
+      redrivePolicy: {
+        deadLetterQueue: dlq,
+        maxReceiveCount: 1000,
+      },
+    })).not.toThrow();
+  });
+
+  test('throws when both deadLetterQueue and redrivePolicy are specified', () => {
+    const stack = new Stack();
+    const dlq = new sqs.Queue(stack, 'DLQ');
+    expect(() => new sqs.Queue(stack, 'Queue', {
+      deadLetterQueue: { queue: dlq, maxReceiveCount: 3 },
+      redrivePolicy: {
+        deadLetterQueue: dlq,
+        maxReceiveCount: 5,
+      },
+    })).toThrow(/you may specify either deadLetterQueue or redrivePolicy, but not both/);
+  });
+});
+
 function testGrant(action: (q: sqs.Queue, principal: iam.IPrincipal) => void, ...expectedActions: string[]) {
   const stack = new Stack();
   const queue = new sqs.Queue(stack, 'MyQueue');

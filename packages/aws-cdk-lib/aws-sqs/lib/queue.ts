@@ -192,6 +192,16 @@ export interface QueueProps {
    * @default - All source queues can designate this queue as their dead-letter queue.
    */
   readonly redriveAllowPolicy?: RedriveAllowPolicy;
+
+  /**
+   * The redrive policy for this queue. Messages that fail processing are sent to the dead-letter queue
+   * specified in this policy.
+   *
+   * This is an alternative to `deadLetterQueue`. You cannot specify both.
+   *
+   * @default - no redrive policy
+   */
+  readonly redrivePolicy?: RedrivePolicy;
 }
 
 /**
@@ -205,6 +215,23 @@ export interface DeadLetterQueue {
 
   /**
    * The number of times a message can be unsuccessfully dequeued before being moved to the dead-letter queue.
+   */
+  readonly maxReceiveCount: number;
+}
+
+/**
+ * Redrive policy for a Queue
+ */
+export interface RedrivePolicy {
+  /**
+   * The dead-letter queue to which Amazon SQS moves messages after the value of maxReceiveCount is exceeded.
+   */
+  readonly deadLetterQueue: IQueue;
+
+  /**
+   * The number of times a message can be unsuccessfully dequeued before being moved to the dead-letter queue.
+   *
+   * Valid values are 1-1000.
    */
   readonly maxReceiveCount: number;
 }
@@ -418,7 +445,12 @@ export class Queue extends QueueBase {
         deadLetterTargetArn: props.deadLetterQueue.queue.queueArn,
         maxReceiveCount: props.deadLetterQueue.maxReceiveCount,
       }
-      : undefined;
+      : props.redrivePolicy
+        ? {
+          deadLetterTargetArn: props.redrivePolicy.deadLetterQueue.queueArn,
+          maxReceiveCount: props.redrivePolicy.maxReceiveCount,
+        }
+        : undefined;
 
     // When `redriveAllowPolicy` is provided, `redrivePermission` defaults to allow all queues (`ALLOW_ALL`);
     const redriveAllowPolicy = props.redriveAllowPolicy ? {
@@ -451,7 +483,9 @@ export class Queue extends QueueBase {
     this._resource = queue;
     this.encryptionMasterKey = encryptionMasterKey;
     this.queueUrl = queue.ref;
-    this.deadLetterQueue = props.deadLetterQueue;
+    this.deadLetterQueue = props.deadLetterQueue ?? (props.redrivePolicy
+      ? { queue: props.redrivePolicy.deadLetterQueue, maxReceiveCount: props.redrivePolicy.maxReceiveCount }
+      : undefined);
     this.encryptionType = encryptionType;
 
     function _determineEncryptionProps(this: Queue): {

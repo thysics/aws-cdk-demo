@@ -34,6 +34,14 @@ const queueValidationRules: ValidationRule<QueueProps>[] = [
     condition: (props) => validateRange(props.deadLetterQueue?.maxReceiveCount, 1, Number.MAX_SAFE_INTEGER),
     message: (props) => `dead letter target maximum receive count must be 1 or more, but ${props.deadLetterQueue?.maxReceiveCount} was provided`,
   },
+  {
+    condition: (props) => !!(props.deadLetterQueue && props.redrivePolicy),
+    message: () => 'you may specify either deadLetterQueue or redrivePolicy, but not both',
+  },
+  {
+    condition: (props) => validateRange(props.redrivePolicy?.maxReceiveCount, 1, 1000),
+    message: (props) => `redrive policy maxReceiveCount must be between 1 and 1000, but ${props.redrivePolicy?.maxReceiveCount} was provided`,
+  },
 ];
 
 const redriveValidationRules: ValidationRule<RedriveAllowPolicy>[] = [
