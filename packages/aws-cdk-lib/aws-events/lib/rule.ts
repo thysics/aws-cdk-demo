@@ -18,6 +18,9 @@ import { propertyInjectable } from '../../core/lib/prop-injectable';
 
 /**
  * Properties for defining an EventBridge Rule
+ *
+ * The `description`, `ruleName`, `eventPattern`, and `crossStackScope` properties
+ * are inherited from `EventCommonOptions`.
  */
 export interface RuleProps extends EventCommonOptions {
   /**
@@ -163,6 +166,10 @@ export class Rule extends Resource implements IRule {
       eventBusName: props.eventBus && props.eventBus.eventBusRef.eventBusName,
       roleArn: props.role?.roleRef.roleArn,
     });
+
+    if (props.schedule?.timeZone) {
+      this._resource.addPropertyOverride('ScheduleExpressionTimezone', props.schedule.timeZone);
+    }
 
     this.addEventPattern(props.eventPattern);
 

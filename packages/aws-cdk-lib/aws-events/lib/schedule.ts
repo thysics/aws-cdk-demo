@@ -61,6 +61,7 @@ export abstract class Schedule {
 
     return new class extends Schedule {
       public readonly expressionString: string = `cron(${minute} ${hour} ${day} ${month} ${weekDay} ${year})`;
+      public readonly timeZone = options.timeZone;
       public _bind(scope: Construct) {
         if (!options.minute) {
           Annotations.of(scope).addWarningV2('@aws-cdk/aws-events:scheduleWillRunEveryMinute', 'cron: If you don\'t pass \'minute\', by default the event runs every minute. Pass \'minute: \'*\'\' if that\'s what you intend, or \'minute: 0\' to run once per hour instead.');
@@ -74,6 +75,11 @@ export abstract class Schedule {
    * Retrieve the expression for this schedule
    */
   public abstract readonly expressionString: string;
+
+  /**
+   * The IANA time zone for the schedule, if applicable
+   */
+  public readonly timeZone?: string;
 
   protected constructor() {}
 
@@ -134,6 +140,16 @@ export interface CronOptions {
    * @default - Any day of the week
    */
   readonly weekDay?: string;
+
+  /**
+   * The IANA time zone to use for the cron expression
+   *
+   * If specified, the cron expression will be evaluated in the given time zone.
+   *
+   * @see https://www.iana.org/time-zones
+   * @default - UTC
+   */
+  readonly timeZone?: string;
 }
 
 class LiteralSchedule extends Schedule {
