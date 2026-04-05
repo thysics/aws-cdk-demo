@@ -1078,6 +1078,58 @@ describe('redriveAllowPolicy', () => {
   });
 });
 
+test('highThroughputFifoEnabled sets deduplicationScope and fifoThroughputLimit', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: true,
+  });
+
+  Template.fromStack(stack).hasResourceProperties('AWS::SQS::Queue', {
+    FifoQueue: true,
+    DeduplicationScope: 'messageGroup',
+    FifoThroughputLimit: 'perMessageGroupId',
+  });
+});
+
+test('highThroughputFifoEnabled infers fifo when not explicitly set', () => {
+  const stack = new Stack();
+  const queue = new sqs.Queue(stack, 'Queue', {
+    highThroughputFifoEnabled: true,
+  });
+
+  expect(queue.fifo).toEqual(true);
+  Template.fromStack(stack).hasResourceProperties('AWS::SQS::Queue', {
+    FifoQueue: true,
+    DeduplicationScope: 'messageGroup',
+    FifoThroughputLimit: 'perMessageGroupId',
+  });
+});
+
+test('highThroughputFifoEnabled throws when fifo is false', () => {
+  const stack = new Stack();
+  expect(() => {
+    new sqs.Queue(stack, 'Queue', {
+      fifo: false,
+      highThroughputFifoEnabled: true,
+    });
+  }).toThrow(/highThroughputFifoEnabled can only be set for FIFO queues/);
+});
+
+test('highThroughputFifoEnabled false does not affect deduplicationScope and fifoThroughputLimit', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: false,
+  });
+
+  Template.fromStack(stack).hasResourceProperties('AWS::SQS::Queue', {
+    FifoQueue: true,
+    DeduplicationScope: Match.absent(),
+    FifoThroughputLimit: Match.absent(),
+  });
+});
+
 function testGrant(action: (q: sqs.Queue, principal: iam.IPrincipal) => void, ...expectedActions: string[]) {
   const stack = new Stack();
   const queue = new sqs.Queue(stack, 'MyQueue');
