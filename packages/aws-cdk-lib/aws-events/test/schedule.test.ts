@@ -75,6 +75,34 @@ describe('schedule', () => {
       events.Schedule.rate(Duration.seconds(Lazy.number({ produce: () => 5 })));
     }).toThrow(/Allowed units for scheduling/);
   });
+
+  test('cron with timeZone stores the time zone', () => {
+    const schedule = events.Schedule.cron({
+      minute: '0',
+      hour: '8',
+      timeZone: 'America/New_York',
+    });
+    expect(schedule.expressionString).toEqual('cron(0 8 * * ? *)');
+    expect(schedule.timeZone).toEqual('America/New_York');
+  });
+
+  test('cron without timeZone has undefined timeZone', () => {
+    const schedule = events.Schedule.cron({
+      minute: '0',
+      hour: '8',
+    });
+    expect(schedule.timeZone).toBeUndefined();
+  });
+
+  test('cron with UTC timeZone stores it correctly', () => {
+    const schedule = events.Schedule.cron({
+      minute: '30',
+      hour: '12',
+      timeZone: 'UTC',
+    });
+    expect(schedule.expressionString).toEqual('cron(30 12 * * ? *)');
+    expect(schedule.timeZone).toEqual('UTC');
+  });
 });
 
 describe('fractional minutes checks', () => {
