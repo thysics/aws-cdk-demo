@@ -166,6 +166,18 @@ export interface QueueProps {
   readonly fifoThroughputLimit?: FifoThroughputLimit;
 
   /**
+   * Whether to enable high throughput for FIFO queues.
+   *
+   * When set to true, this automatically configures `deduplicationScope` to `MESSAGE_GROUP`
+   * and `fifoThroughputLimit` to `PER_MESSAGE_GROUP_ID`.
+   *
+   * (Only applies to FIFO queues.)
+   *
+   * @default false
+   */
+  readonly highThroughputFifoEnabled?: boolean;
+
+  /**
    * Policy to apply when the queue is removed from the stack
    *
    * Even though queues are technically stateful, their contents are transient and it
@@ -543,6 +555,7 @@ export class Queue extends QueueBase {
     if (typeof fifoQueue === 'undefined' && props.contentBasedDeduplication) { fifoQueue = true; }
     if (typeof fifoQueue === 'undefined' && props.deduplicationScope) { fifoQueue = true; }
     if (typeof fifoQueue === 'undefined' && props.fifoThroughputLimit) { fifoQueue = true; }
+    if (typeof fifoQueue === 'undefined' && props.highThroughputFifoEnabled) { fifoQueue = true; }
 
     // If we have a name, see that it agrees with the FIFO setting
     if (typeof queueName === 'string') {
@@ -568,8 +581,8 @@ export class Queue extends QueueBase {
 
     return {
       contentBasedDeduplication: props.contentBasedDeduplication,
-      deduplicationScope: props.deduplicationScope,
-      fifoThroughputLimit: props.fifoThroughputLimit,
+      deduplicationScope: props.highThroughputFifoEnabled ? DeduplicationScope.MESSAGE_GROUP : props.deduplicationScope,
+      fifoThroughputLimit: props.highThroughputFifoEnabled ? FifoThroughputLimit.PER_MESSAGE_GROUP_ID : props.fifoThroughputLimit,
 
       // This value will be passed directly into the L1 props, but the underlying `AWS::SQS::Queue`
       // does not accept `FifoQueue: false`. It must either be `true` or absent. So change a `false` into

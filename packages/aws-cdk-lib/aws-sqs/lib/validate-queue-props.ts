@@ -34,6 +34,10 @@ const queueValidationRules: ValidationRule<QueueProps>[] = [
     condition: (props) => validateRange(props.deadLetterQueue?.maxReceiveCount, 1, Number.MAX_SAFE_INTEGER),
     message: (props) => `dead letter target maximum receive count must be 1 or more, but ${props.deadLetterQueue?.maxReceiveCount} was provided`,
   },
+  {
+    condition: (props) => !!(props.highThroughputFifoEnabled && props.fifo === false),
+    message: () => 'highThroughputFifoEnabled can only be set for FIFO queues',
+  },
 ];
 
 const redriveValidationRules: ValidationRule<RedriveAllowPolicy>[] = [
