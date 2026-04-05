@@ -852,6 +852,59 @@ test('test a queue throws when deduplicationScope specified on non fifo queue', 
   }).toThrow();
 });
 
+test('highThroughputFifoEnabled sets DeduplicationScope and FifoThroughputLimit on a FIFO queue', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: true,
+  });
+
+  Template.fromStack(stack).templateMatches({
+    'Resources': {
+      'Queue4A7E3555': {
+        'Type': 'AWS::SQS::Queue',
+        'Properties': {
+          'DeduplicationScope': 'messageGroup',
+          'FifoQueue': true,
+          'FifoThroughputLimit': 'perMessageGroupId',
+        },
+        'UpdateReplacePolicy': 'Delete',
+        'DeletionPolicy': 'Delete',
+      },
+    },
+  });
+});
+
+test('highThroughputFifoEnabled throws on a non-FIFO queue', () => {
+  const stack = new Stack();
+  expect(() => {
+    new sqs.Queue(stack, 'Queue', {
+      fifo: false,
+      highThroughputFifoEnabled: true,
+    });
+  }).toThrow(/highThroughputFifoEnabled can only be set for FIFO queues/);
+});
+
+test('highThroughputFifoEnabled defaults to undefined when not specified', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+  });
+
+  Template.fromStack(stack).templateMatches({
+    'Resources': {
+      'Queue4A7E3555': {
+        'Type': 'AWS::SQS::Queue',
+        'Properties': {
+          'FifoQueue': true,
+        },
+        'UpdateReplacePolicy': 'Delete',
+        'DeletionPolicy': 'Delete',
+      },
+    },
+  });
+});
+
 test('fifo: false is dropped from properties', () => {
   // GIVEN
   const stack = new Stack();
