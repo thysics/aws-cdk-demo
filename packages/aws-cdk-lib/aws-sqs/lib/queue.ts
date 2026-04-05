@@ -166,6 +166,18 @@ export interface QueueProps {
   readonly fifoThroughputLimit?: FifoThroughputLimit;
 
   /**
+   * Enable high throughput sending and deduplication for this FIFO queue.
+   *
+   * When set to true, `DeduplicationScope` is automatically set to `messageGroup`
+   * and `FifoThroughputLimit` is automatically set to `perMessageGroupId`.
+   *
+   * (Only applies to FIFO queues.)
+   *
+   * @default false
+   */
+  readonly highThroughputFifoEnabled?: boolean;
+
+  /**
    * Policy to apply when the queue is removed from the stack
    *
    * Even though queues are technically stateful, their contents are transient and it
@@ -543,6 +555,7 @@ export class Queue extends QueueBase {
     if (typeof fifoQueue === 'undefined' && props.contentBasedDeduplication) { fifoQueue = true; }
     if (typeof fifoQueue === 'undefined' && props.deduplicationScope) { fifoQueue = true; }
     if (typeof fifoQueue === 'undefined' && props.fifoThroughputLimit) { fifoQueue = true; }
+    if (typeof fifoQueue === 'undefined' && props.highThroughputFifoEnabled) { fifoQueue = true; }
 
     // If we have a name, see that it agrees with the FIFO setting
     if (typeof queueName === 'string') {
@@ -566,10 +579,18 @@ export class Queue extends QueueBase {
       throw new ValidationError('FIFO throughput limit can only be defined for FIFO queues', this);
     }
 
+    if (props.highThroughputFifoEnabled && !fifoQueue) {
+      throw new ValidationError('High throughput can only be enabled for FIFO queues', this);
+    }
+
     return {
       contentBasedDeduplication: props.contentBasedDeduplication,
-      deduplicationScope: props.deduplicationScope,
-      fifoThroughputLimit: props.fifoThroughputLimit,
+      deduplicationScope: props.highThroughputFifoEnabled
+        ? DeduplicationScope.MESSAGE_GROUP
+        : props.deduplicationScope,
+      fifoThroughputLimit: props.highThroughputFifoEnabled
+        ? FifoThroughputLimit.PER_MESSAGE_GROUP_ID
+        : props.fifoThroughputLimit,
 
       // This value will be passed directly into the L1 props, but the underlying `AWS::SQS::Queue`
       // does not accept `FifoQueue: false`. It must either be `true` or absent. So change a `false` into
