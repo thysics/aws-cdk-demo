@@ -874,6 +874,70 @@ test('fifo: false is dropped from properties', () => {
   });
 });
 
+test('highThroughputFifoEnabled sets DeduplicationScope and FifoThroughputLimit on FIFO queue', () => {
+  const stack = new Stack();
+  const queue = new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: true,
+  });
+
+  expect(queue.fifo).toEqual(true);
+  Template.fromStack(stack).templateMatches({
+    'Resources': {
+      'Queue4A7E3555': {
+        'Type': 'AWS::SQS::Queue',
+        'Properties': {
+          'DeduplicationScope': 'messageGroup',
+          'FifoQueue': true,
+          'FifoThroughputLimit': 'perMessageGroupId',
+        },
+        'UpdateReplacePolicy': 'Delete',
+        'DeletionPolicy': 'Delete',
+      },
+    },
+  });
+});
+
+test('highThroughputFifoEnabled infers FIFO queue when fifo is not explicitly set', () => {
+  const stack = new Stack();
+  const queue = new sqs.Queue(stack, 'Queue', {
+    highThroughputFifoEnabled: true,
+  });
+
+  expect(queue.fifo).toEqual(true);
+  Template.fromStack(stack).hasResourceProperties('AWS::SQS::Queue', {
+    'FifoQueue': true,
+    'DeduplicationScope': 'messageGroup',
+    'FifoThroughputLimit': 'perMessageGroupId',
+  });
+});
+
+test('highThroughputFifoEnabled throws when fifo is false', () => {
+  const stack = new Stack();
+  expect(() => {
+    new sqs.Queue(stack, 'Queue', {
+      fifo: false,
+      highThroughputFifoEnabled: true,
+    });
+  }).toThrow(/highThroughputFifoEnabled can only be.*FIFO queues/);
+});
+
+test('highThroughputFifoEnabled overrides explicitly set deduplicationScope and fifoThroughputLimit', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: true,
+    deduplicationScope: sqs.DeduplicationScope.QUEUE,
+    fifoThroughputLimit: sqs.FifoThroughputLimit.PER_QUEUE,
+  });
+
+  Template.fromStack(stack).hasResourceProperties('AWS::SQS::Queue', {
+    'FifoQueue': true,
+    'DeduplicationScope': 'messageGroup',
+    'FifoThroughputLimit': 'perMessageGroupId',
+  });
+});
+
 test('test metrics', () => {
   // GIVEN
   const stack = new Stack();
