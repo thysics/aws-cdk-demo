@@ -164,6 +164,11 @@ export class Rule extends Resource implements IRule {
       roleArn: props.role?.roleRef.roleArn,
     });
 
+    // Set the schedule expression timezone if provided
+    if (props.schedule?.timeZone) {
+      this._resource.addPropertyOverride('ScheduleExpressionTimezone', props.schedule.timeZone);
+    }
+
     this.addEventPattern(props.eventPattern);
 
     for (const target of props.targets || []) {
