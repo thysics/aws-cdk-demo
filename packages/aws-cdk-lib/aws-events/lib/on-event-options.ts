@@ -9,6 +9,10 @@ export interface EventCommonOptions {
   /**
    * A description of the rule's purpose.
    *
+   * Maps to the `Description` property of the `AWS::Events::Rule` CloudFormation resource.
+   *
+   * @see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-events-rule.html#cfn-events-rule-description
+   *
    * @default - No description
    */
   readonly description?: string;
