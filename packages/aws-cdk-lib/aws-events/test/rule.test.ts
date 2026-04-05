@@ -31,6 +31,19 @@ describe('rule', () => {
     });
   });
 
+  test('rule with description', () => {
+    const stack = new cdk.Stack();
+
+    new Rule(stack, 'MyRule', {
+      schedule: Schedule.rate(cdk.Duration.minutes(10)),
+      description: 'This is my rule description',
+    });
+
+    Template.fromStack(stack).hasResourceProperties('AWS::Events::Rule', {
+      'Description': 'This is my rule description',
+    });
+  });
+
   test('rule displays warning when minutes are not included in cron', () => {
     const stack = new cdk.Stack();
     new Rule(stack, 'MyRule', {
@@ -788,6 +801,58 @@ describe('rule', () => {
       schedule: Schedule.rate(cdk.Duration.minutes(10)),
       eventBus,
     })).toThrow(/Cannot associate rule with 'eventBus' when using 'schedule'/);
+  });
+
+  test('rule with cron schedule and timeZone produces ScheduleExpressionTimezone', () => {
+    const stack = new cdk.Stack();
+
+    new Rule(stack, 'MyRule', {
+      schedule: Schedule.cron({
+        minute: '0',
+        hour: '8',
+        timeZone: 'America/New_York',
+      }),
+    });
+
+    Template.fromStack(stack).hasResourceProperties('AWS::Events::Rule', {
+      'ScheduleExpression': 'cron(0 8 * * ? *)',
+      'ScheduleExpressionTimezone': 'America/New_York',
+      'State': 'ENABLED',
+    });
+  });
+
+  test('rule with cron schedule without timeZone does not have ScheduleExpressionTimezone', () => {
+    const stack = new cdk.Stack();
+
+    new Rule(stack, 'MyRule', {
+      schedule: Schedule.cron({
+        minute: '0',
+        hour: '8',
+      }),
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::Events::Rule', {
+      'ScheduleExpression': 'cron(0 8 * * ? *)',
+      'State': 'ENABLED',
+    });
+    // Verify ScheduleExpressionTimezone is NOT present
+    template.hasResourceProperties('AWS::Events::Rule', Match.not(
+      Match.objectLike({ 'ScheduleExpressionTimezone': Match.anyValue() }),
+    ));
+  });
+
+  test('rule with rate schedule does not have ScheduleExpressionTimezone', () => {
+    const stack = new cdk.Stack();
+
+    new Rule(stack, 'MyRule', {
+      schedule: Schedule.rate(cdk.Duration.minutes(10)),
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::Events::Rule', Match.not(
+      Match.objectLike({ 'ScheduleExpressionTimezone': Match.anyValue() }),
+    ));
   });
 
   test('allow an imported target if is in the same account and region', () => {
