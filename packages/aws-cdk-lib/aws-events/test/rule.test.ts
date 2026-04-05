@@ -31,6 +31,19 @@ describe('rule', () => {
     });
   });
 
+  test('rule with description', () => {
+    const stack = new cdk.Stack();
+
+    new Rule(stack, 'MyRule', {
+      schedule: Schedule.rate(cdk.Duration.minutes(10)),
+      description: 'This is my rule description',
+    });
+
+    Template.fromStack(stack).hasResourceProperties('AWS::Events::Rule', {
+      'Description': 'This is my rule description',
+    });
+  });
+
   test('rule displays warning when minutes are not included in cron', () => {
     const stack = new cdk.Stack();
     new Rule(stack, 'MyRule', {
