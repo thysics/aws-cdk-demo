@@ -21,6 +21,15 @@ import { propertyInjectable } from '../../core/lib/prop-injectable';
  */
 export interface RuleProps extends EventCommonOptions {
   /**
+   * A description of the rule's purpose.
+   *
+   * @see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-events-rule.html#cfn-events-rule-description
+   *
+   * @default - No description.
+   */
+  readonly description?: string;
+
+  /**
    * Indicates whether the rule is enabled.
    *
    * @default true
