@@ -21,6 +21,15 @@ import { propertyInjectable } from '../../core/lib/prop-injectable';
  */
 export interface RuleProps extends EventCommonOptions {
   /**
+   * A description of the rule's purpose.
+   *
+   * Maps to the CloudFormation `Description` property on `AWS::Events::Rule`.
+   *
+   * @default - No description
+   */
+  readonly description?: string;
+
+  /**
    * Indicates whether the rule is enabled.
    *
    * @default true
