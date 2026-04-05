@@ -852,6 +852,83 @@ test('test a queue throws when deduplicationScope specified on non fifo queue', 
   }).toThrow();
 });
 
+test('highThroughputFifoEnabled sets DeduplicationScope and FifoThroughputLimit on FIFO queue', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: true,
+  });
+
+  Template.fromStack(stack).templateMatches({
+    'Resources': {
+      'Queue4A7E3555': {
+        'Type': 'AWS::SQS::Queue',
+        'Properties': {
+          'DeduplicationScope': 'messageGroup',
+          'FifoQueue': true,
+          'FifoThroughputLimit': 'perMessageGroupId',
+        },
+        'UpdateReplacePolicy': 'Delete',
+        'DeletionPolicy': 'Delete',
+      },
+    },
+  });
+});
+
+test('highThroughputFifoEnabled implicitly sets fifo to true', () => {
+  const stack = new Stack();
+  const queue = new sqs.Queue(stack, 'Queue', {
+    highThroughputFifoEnabled: true,
+  });
+
+  expect(queue.fifo).toEqual(true);
+  Template.fromStack(stack).templateMatches({
+    'Resources': {
+      'Queue4A7E3555': {
+        'Type': 'AWS::SQS::Queue',
+        'Properties': {
+          'DeduplicationScope': 'messageGroup',
+          'FifoQueue': true,
+          'FifoThroughputLimit': 'perMessageGroupId',
+        },
+        'UpdateReplacePolicy': 'Delete',
+        'DeletionPolicy': 'Delete',
+      },
+    },
+  });
+});
+
+test('highThroughputFifoEnabled throws when fifo is explicitly false', () => {
+  const stack = new Stack();
+  expect(() => {
+    new sqs.Queue(stack, 'Queue', {
+      fifo: false,
+      highThroughputFifoEnabled: true,
+    });
+  }).toThrow(/highThroughputFifoEnabled can only be set when fifo is true/);
+});
+
+test('highThroughputFifoEnabled false does not set high throughput properties', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: false,
+  });
+
+  Template.fromStack(stack).templateMatches({
+    'Resources': {
+      'Queue4A7E3555': {
+        'Type': 'AWS::SQS::Queue',
+        'Properties': {
+          'FifoQueue': true,
+        },
+        'UpdateReplacePolicy': 'Delete',
+        'DeletionPolicy': 'Delete',
+      },
+    },
+  });
+});
+
 test('fifo: false is dropped from properties', () => {
   // GIVEN
   const stack = new Stack();
