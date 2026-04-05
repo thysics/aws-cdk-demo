@@ -31,6 +31,21 @@ describe('rule', () => {
     });
   });
 
+  test('rule with description', () => {
+    const stack = new cdk.Stack();
+
+    new Rule(stack, 'MyRule', {
+      schedule: Schedule.rate(cdk.Duration.minutes(10)),
+      description: 'This is my rule description',
+    });
+
+    Template.fromStack(stack).hasResourceProperties('AWS::Events::Rule', {
+      'Description': 'This is my rule description',
+      'ScheduleExpression': 'rate(10 minutes)',
+      'State': 'ENABLED',
+    });
+  });
+
   test('rule displays warning when minutes are not included in cron', () => {
     const stack = new cdk.Stack();
     new Rule(stack, 'MyRule', {
@@ -54,6 +69,46 @@ describe('rule', () => {
     });
 
     Annotations.fromStack(stack).hasNoWarning('/Default/MyRule', Match.anyValue());
+  });
+
+  test('rule with cron schedule and timeZone passes ScheduleExpressionTimezone to CfnRule', () => {
+    const stack = new cdk.Stack();
+
+    new Rule(stack, 'MyRule', {
+      schedule: Schedule.cron({
+        minute: '0',
+        hour: '8',
+        day: '1',
+        timeZone: 'America/New_York',
+      }),
+    });
+
+    Template.fromStack(stack).hasResourceProperties('AWS::Events::Rule', {
+      'ScheduleExpression': 'cron(0 8 1 * ? *)',
+      'ScheduleExpressionTimezone': 'America/New_York',
+      'State': 'ENABLED',
+    });
+  });
+
+  test('rule with cron schedule without timeZone does not set ScheduleExpressionTimezone', () => {
+    const stack = new cdk.Stack();
+
+    new Rule(stack, 'MyRule', {
+      schedule: Schedule.cron({
+        minute: '0',
+        hour: '8',
+      }),
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::Events::Rule', {
+      'ScheduleExpression': 'cron(0 8 * * ? *)',
+      'State': 'ENABLED',
+    });
+    // Ensure ScheduleExpressionTimezone is not present
+    const resources = template.toJSON().Resources;
+    const ruleResource = Object.values(resources).find((r: any) => r.Type === 'AWS::Events::Rule') as any;
+    expect(ruleResource.Properties.ScheduleExpressionTimezone).toBeUndefined();
   });
 
   test('can get rule name', () => {
