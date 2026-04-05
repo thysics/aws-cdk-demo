@@ -18,6 +18,9 @@ import { propertyInjectable } from '../../core/lib/prop-injectable';
 
 /**
  * Properties for defining an EventBridge Rule
+ *
+ * The `description`, `ruleName`, `eventPattern`, and `crossStackScope` properties
+ * are inherited from `EventCommonOptions`.
  */
 export interface RuleProps extends EventCommonOptions {
   /**
