@@ -852,6 +852,67 @@ test('test a queue throws when deduplicationScope specified on non fifo queue', 
   }).toThrow();
 });
 
+test('highThroughputFifoEnabled on a FIFO queue sets DeduplicationScope and FifoThroughputLimit', () => {
+  const stack = new Stack();
+  const queue = new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: true,
+  });
+
+  expect(queue.fifo).toEqual(true);
+  Template.fromStack(stack).templateMatches({
+    'Resources': {
+      'Queue4A7E3555': {
+        'Type': 'AWS::SQS::Queue',
+        'Properties': {
+          'DeduplicationScope': 'messageGroup',
+          'FifoQueue': true,
+          'FifoThroughputLimit': 'perMessageGroupId',
+        },
+        'UpdateReplacePolicy': 'Delete',
+        'DeletionPolicy': 'Delete',
+      },
+    },
+  });
+});
+
+test('highThroughputFifoEnabled on a non-FIFO queue throws a validation error', () => {
+  const stack = new Stack();
+  expect(() => {
+    new sqs.Queue(stack, 'Queue', {
+      fifo: false,
+      highThroughputFifoEnabled: true,
+    });
+  }).toThrow(/highThroughputFifoEnabled can only be set for FIFO queues/);
+});
+
+test('highThroughputFifoEnabled defaults to false and does not affect existing behavior', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+  });
+
+  Template.fromStack(stack).hasResourceProperties('AWS::SQS::Queue', {
+    'FifoQueue': true,
+    'DeduplicationScope': Match.absent(),
+    'FifoThroughputLimit': Match.absent(),
+  });
+});
+
+test('highThroughputFifoEnabled set to false does not affect existing behavior', () => {
+  const stack = new Stack();
+  new sqs.Queue(stack, 'Queue', {
+    fifo: true,
+    highThroughputFifoEnabled: false,
+  });
+
+  Template.fromStack(stack).hasResourceProperties('AWS::SQS::Queue', {
+    'FifoQueue': true,
+    'DeduplicationScope': Match.absent(),
+    'FifoThroughputLimit': Match.absent(),
+  });
+});
+
 test('fifo: false is dropped from properties', () => {
   // GIVEN
   const stack = new Stack();
