@@ -9,6 +9,8 @@ export interface EventCommonOptions {
   /**
    * A description of the rule's purpose.
    *
+   * @see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-events-rule.html#cfn-events-rule-description
+   *
    * @default - No description
    */
   readonly description?: string;
